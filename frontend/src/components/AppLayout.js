@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Home, Library, ClipboardList, Users, Archive, User, Sparkles } from "lucide-react";
+import { Home, Library, ClipboardList, Users, Archive, User, Sparkles, Inbox } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { colors } from "@/theme/colors";
 
@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: "/projects", icon: Library, label: "Projects", testId: "nav-projects" },
   { to: "/tasks", icon: ClipboardList, label: "Tasks", testId: "nav-tasks" },
   { to: "/staff", icon: Users, label: "Team", testId: "nav-team", managerOnly: true },
+  { to: "/reviews", icon: Inbox, label: "Reviews", testId: "nav-reviews", managerOnly: true },
   { to: "/history", icon: Archive, label: "History", testId: "nav-history" },
   { to: "/profile", icon: User, label: "Profile", testId: "nav-profile" },
 ];

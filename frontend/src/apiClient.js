@@ -1,6 +1,16 @@
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const TOKEN_KEY = "scindia_token";
 
+/* ---------- 401 auto-logout event bus ---------- */
+const AUTH_LOGOUT_EVENT = "auth:logout";
+export function onAuthLogout(cb) {
+  window.addEventListener(AUTH_LOGOUT_EVENT, cb);
+  return () => window.removeEventListener(AUTH_LOGOUT_EVENT, cb);
+}
+function emitLogout() {
+  window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -36,6 +46,10 @@ async function request(method, path, body, auth = true) {
     data = text;
   }
   if (!resp.ok) {
+    if (resp.status === 401) {
+      clearToken();
+      emitLogout();
+    }
     const msg =
       (data && (data.detail || data.message)) ||
       `Request failed (${resp.status})`;
