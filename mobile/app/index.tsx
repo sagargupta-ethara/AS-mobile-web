@@ -1,10 +1,27 @@
-// Index just bounces to login/home via the AuthGate in _layout.
 import { Redirect } from "expo-router";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { useAuth } from "@/src/auth/AuthContext";
+import { colors } from "@/src/theme/colors";
 
-import { useAuth } from "@/src/contexts/AuthContext";
+export default function Index() {
+  const { isAuthed, loading } = useAuth();
 
-export default function Index(): React.ReactElement | null {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  return <Redirect href={user ? "/home" : "/login"} />;
+  if (loading) {
+    return (
+      <View style={styles.container} testID="splash-loading">
+        <ActivityIndicator color={colors.brand.maroon} size="large" />
+      </View>
+    );
+  }
+
+  return isAuthed ? <Redirect href="/(app)" /> : <Redirect href="/login" />;
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bg.primary,
+  },
+});

@@ -1,35 +1,42 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox } from "react-native";
+import { LogBox, StatusBar } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
-import { AuthProvider, useAuth } from "@/src/contexts/AuthContext";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { AuthProvider, useAuth } from "@/src/auth/AuthContext";
+import { ToastProvider } from "@/src/ui/toast";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
 
-const AuthGate = ({ children }: { children: React.ReactNode }): React.ReactElement | null => {
-  const { user, loading } = useAuth();
+function AuthGate() {
+  const { isAuthed, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-    const first = segments[0];
-    const inAuthArea = first === "login";
-    if (!user && !inAuthArea) {
+    const inAuthGroup = segments[0] === "(app)";
+    if (!isAuthed && inAuthGroup) {
       router.replace("/login");
-    } else if (user && (inAuthArea || first === undefined)) {
-      router.replace("/home");
+    } else if (isAuthed && (segments[0] === "login" || segments.length === 0 || segments[0] === undefined)) {
+      router.replace("/(app)");
     }
-  }, [user, loading, segments, router]);
+  }, [isAuthed, loading, segments, router]);
 
-  if (loading) return null;
-  return <>{children}</>;
-};
+  return (
+    <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="(app)" />
+    </Stack>
+  );
+}
 
-export default function RootLayout(): React.ReactElement | null {
+export default function RootLayout() {
   const [loaded, error] = useIconFonts();
 
   useEffect(() => {
@@ -41,10 +48,17 @@ export default function RootLayout(): React.ReactElement | null {
   if (!loaded && !error) return null;
 
   return (
-    <AuthProvider>
-      <AuthGate>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0c0c0c" } }} />
-      </AuthGate>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <KeyboardProvider>
+          <StatusBar barStyle="dark-content" />
+          <AuthProvider>
+            <ToastProvider>
+              <AuthGate />
+            </ToastProvider>
+          </AuthProvider>
+        </KeyboardProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
