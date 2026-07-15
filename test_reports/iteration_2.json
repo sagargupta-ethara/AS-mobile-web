@@ -1,0 +1,19 @@
+{
+  "summary": "Verified both targeted bug fixes on ported Scindia Household backend. Bug Fix 1 (GET /api/users KeyError 'name') and Bug Fix 2 (openapi/docs/redoc under /api prefix) are both resolved. Seed logins and auth/me regression checks pass.",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "GET /api/openapi.json -> HTTP 200, info.title='Scindia Household API v2', 24 paths",
+    "GET /api/docs -> HTTP 200",
+    "GET /api/redoc -> HTTP 200",
+    "POST /api/auth/login for admin/manager/tasker returns correct role & name",
+    "GET /api/auth/me for all 3 tokens returns correct role & name",
+    "GET /api/users (admin bearer) -> HTTP 200, count=3, keys={id,name,email,phone,role,avatar,avg_rating,ratings_count,created_at}",
+    "Tolerant _to_user_public: inserted raw user doc with NO 'name' field (email noname@example.com) via mongosh, GET /api/users returned HTTP 200 with count=4 and the nameless doc surfaced with name falling back to email ('noname@example.com')"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (per request)"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "During fallback verification, an initial attempt with email 'noname@scindia.test' returned HTTP 500 due to Pydantic EmailStr rejecting the reserved '.test' TLD (not a fix regression). Retest with 'noname@example.com' confirmed the fallback works. Backfill update_many at startup does not overwrite docs inserted AFTER startup, so the runtime tolerance in _to_user_public is what protects the endpoint — verified working."
+}

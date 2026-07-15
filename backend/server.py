@@ -39,7 +39,12 @@ JWT_EXPIRE_HOURS = int(os.environ.get('JWT_EXPIRE_HOURS', '720'))
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
-app = FastAPI(title="Scindia Household API v2")
+app = FastAPI(
+    title="Scindia Household API v2",
+    openapi_url="/api/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+)
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(
@@ -272,17 +277,18 @@ async def _user_avg_rating(user_id: str) -> tuple[float, int]:
     return 0.0, 0
 
 async def _to_user_public(doc: dict) -> UserPublic:
-    avg, cnt = await _user_avg_rating(doc["id"])
+    avg, cnt = await _user_avg_rating(doc.get("id", ""))
+    email = doc.get("email") or ""
     return UserPublic(
-        id=doc["id"],
-        name=doc["name"],
-        email=doc["email"],
+        id=doc.get("id", ""),
+        name=doc.get("name") or email or "",
+        email=email,
         phone=doc.get("phone"),
-        role=doc["role"],
+        role=doc.get("role", "tasker"),
         avatar=doc.get("avatar"),
         avg_rating=avg,
         ratings_count=cnt,
-        created_at=doc["created_at"],
+        created_at=doc.get("created_at"),
     )
 
 async def _user_ref(user_id: str) -> Optional[UserRef]:
@@ -484,6 +490,14 @@ async def bootstrap():
     migrated = await db.users.update_many({"role": "staff"}, {"$set": {"role": "tasker"}})
     if migrated.modified_count:
         logger.info(f"Migrated {migrated.modified_count} user(s) role staff->tasker")
+
+    # Backfill: any user doc missing `name` gets email copied in (safe, idempotent)
+    backfilled = await db.users.update_many(
+        {"name": {"$exists": False}},
+        [{"$set": {"name": "$email"}}],
+    )
+    if backfilled.modified_count:
+        logger.info(f"Backfilled name from email on {backfilled.modified_count} user(s)")
 
     # Drop legacy task docs (old schema had assignee_id / proofs — not compatible)
     legacy = await db.tasks.count_documents({"assignments": {"$exists": False}})
