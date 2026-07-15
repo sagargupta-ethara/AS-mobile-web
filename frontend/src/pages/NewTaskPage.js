@@ -4,6 +4,7 @@ import { ChevronLeft, Sparkles } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/apiClient";
 import { colors } from "@/theme/colors";
+import AiTaskAssistant from "@/components/AiTaskAssistant";
 
 const PRIORITIES = ["low", "medium", "high", "urgent"];
 const RECURRENCE = [{ key: "daily", label: "Daily" }, { key: "weekly", label: "Weekly" }, { key: "monthly", label: "Monthly" }];
@@ -25,6 +26,7 @@ export default function NewTaskPage() {
   const [projectId, setProjectId] = useState(paramProjectId || null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrence, setRecurrence] = useState("weekly");
+  const [showAi, setShowAi] = useState(false);
   const [users, setUsers] = useState([]);
   const [categories, setCategories] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -47,6 +49,20 @@ export default function NewTaskPage() {
   const toggleAssignee = (id) => setAssigneeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   const canSubmit = title.trim().length > 0 && assigneeIds.length > 0;
 
+  const applyAiResult = (parsed) => {
+    if (parsed.title) setTitle(parsed.title);
+    if (parsed.description) setDescription(parsed.description);
+    if (parsed.category) setCategory(parsed.category);
+    if (parsed.priority) setPriority(parsed.priority);
+    if (parsed.due_date_iso) {
+      const d = new Date(parsed.due_date_iso);
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      setDueDate(local);
+    }
+    if (parsed.is_recurring) { setIsRecurring(true); if (parsed.recurrence) setRecurrence(parsed.recurrence); }
+    setShowAi(false);
+  };
+
   const submit = async () => {
     if (!canSubmit) return;
     setSaving(true);
@@ -63,6 +79,9 @@ export default function NewTaskPage() {
       <div className="flex items-center gap-2 px-4 pt-3 pb-3 border-b" style={{ borderColor: colors.border.subtle }}>
         <button data-testid="new-task-back" onClick={() => navigate(-1)} className="w-10 h-10 rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"><ChevronLeft size={22} style={{ color: colors.brand.maroon }} /></button>
         <div className="flex-1"><p className="text-[10px] tracking-[2.5px] font-bold" style={{ color: colors.brand.gold }}>NEW ASSIGNMENT</p><p className="text-[22px] font-bold tracking-tight mt-0.5" style={{ color: colors.brand.maroon }}>Create Task</p></div>
+        <button data-testid="ai-parse-button" onClick={() => setShowAi(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-bold transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ background: `linear-gradient(135deg, ${colors.brand.maroon}, ${colors.brand.maroonDeep})`, color: colors.text.inverse, border: `1px solid ${colors.brand.gold}` }}>
+          <Sparkles size={14} style={{ color: colors.brand.gold }} /> AI Parse
+        </button>
       </div>
       <div className="p-5 pb-32 max-w-2xl">
         <Field label="Title"><input data-testid="task-title-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Prepare drawing room for evening guests" className="w-full rounded-xl border px-3.5 py-3.5 text-[15px] outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle, color: colors.text.primary }} /></Field>
@@ -122,6 +141,7 @@ export default function NewTaskPage() {
           {saving ? <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <>{assigneeIds.length > 1 ? `Assign to ${assigneeIds.length}` : "Assign Task"}</>}
         </button>
       </div>
+      <AiTaskAssistant visible={showAi} onClose={() => setShowAi(false)} onApply={applyAiResult} />
     </div>
   );
 }

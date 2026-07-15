@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, saveToken, clearToken, getToken } from "@/apiClient";
+import { api, saveToken, clearToken, getToken, onAuthLogout } from "@/apiClient";
 
 const AuthContext = createContext(null);
 
@@ -28,6 +28,13 @@ export function AuthProvider({ children }) {
       setLoading(false);
     })();
   }, [refresh]);
+
+  /* 401 auto-logout listener */
+  useEffect(() => {
+    return onAuthLogout(() => {
+      setUser(null);
+    });
+  }, []);
 
   const login = useCallback(async (email, password) => {
     const resp = await api.post(
