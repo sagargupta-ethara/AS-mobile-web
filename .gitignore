@@ -90,3 +90,7 @@ mobile/.metro-cache/
 credentials.json
 *.key
 .credentials
+
+# OMC / Claude Code operational state (not part of the app or deploy)
+.omc/
+.claude/
