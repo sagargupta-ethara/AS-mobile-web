@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, RotateCcw, Sparkles, Send, MessageSquare } from "lucide-react";
 import { api } from "@/apiClient";
 import { colors } from "@/theme/colors";
+import { IconButton, Spinner } from "@/components/ui-kit";
 
 const SESSION_KEY = "concierge_session_id";
 const STARTERS = [
@@ -75,82 +76,81 @@ export default function ConciergePage() {
   const showStarters = messages.length === 0 && !loading;
 
   return (
-    <div className="flex flex-col h-screen" style={{ backgroundColor: colors.bg.primary }}>
+    <div className="flex flex-col h-screen" style={{ backgroundColor: colors.bg.canvas }}>
       {/* Header */}
-      <div
-        className="relative px-4 pt-4 pb-3.5 rounded-b-[20px] overflow-hidden shrink-0"
-        style={{ background: `linear-gradient(135deg, ${colors.brand.maroonDeep}, ${colors.brand.maroon})` }}
-      >
-        <div className="flex items-center gap-2">
-          <button
-            data-testid="concierge-back"
+      <div className="shrink-0 border-b" style={{ borderColor: colors.border.subtle, backgroundColor: colors.bg.card }}>
+        <div className="max-w-3xl mx-auto w-full flex items-center gap-3 px-4 py-3">
+          <IconButton
+            testId="concierge-back"
+            icon={<ChevronLeft size={18} />}
+            label="Back"
+            variant="outline"
+            size={38}
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(253,251,247,0.12)" }}
-          >
-            <ChevronLeft size={22} style={{ color: colors.text.inverse }} />
-          </button>
+          />
           <div className="flex-1 text-center">
-            <p className="text-[9.5px] tracking-[2.5px] font-bold mb-0.5" style={{ color: colors.brand.gold }}>ROYAL CONCIERGE ✦ AI</p>
-            <h1 className="text-lg font-bold tracking-tight" style={{ color: colors.text.inverse }}>Estate Concierge</h1>
+            <p className="text-[9.5px] tracking-[2.5px] font-bold mb-0.5" style={{ color: colors.brand.gold }}>ROYAL CONCIERGE · AI</p>
+            <h1 className="font-display text-lg font-bold" style={{ color: colors.brand.maroon }}>AI Concierge</h1>
           </div>
-          <button
-            data-testid="concierge-clear"
+          <IconButton
+            testId="concierge-clear"
+            icon={<RotateCcw size={17} />}
+            label="Clear chat"
+            variant="outline"
+            size={38}
             onClick={clearChat}
-            className="w-10 h-10 rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(253,251,247,0.12)" }}
-          >
-            <RotateCcw size={20} style={{ color: colors.text.inverse }} />
-          </button>
+          />
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 pt-4 pb-4">
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <span className="animate-spin w-8 h-8 border-3 rounded-full" style={{ borderColor: colors.brand.maroon, borderTopColor: "transparent" }} />
-          </div>
-        ) : (
-          <>
-            {showStarters && <WelcomeCard onPick={(t) => send(t)} />}
-            {messages.map((msg) => <Bubble key={msg.id} msg={msg} />)}
-            {sending && <TypingBubble />}
-            <div ref={bottomRef} />
-          </>
-        )}
+      <div className="flex-1 overflow-y-auto scroll-elegant">
+        <div className="max-w-3xl mx-auto w-full px-4 pt-5 pb-4">
+          {loading ? (
+            <Spinner />
+          ) : (
+            <>
+              {showStarters && <WelcomeCard onPick={(t) => send(t)} />}
+              {messages.map((msg) => <Bubble key={msg.id} msg={msg} />)}
+              {sending && <TypingBubble />}
+              <div ref={bottomRef} />
+            </>
+          )}
+        </div>
       </div>
 
       {/* Input bar */}
-      <div className="shrink-0 border-t px-3 pt-2.5 pb-3" style={{ borderColor: colors.border.subtle }}>
-        <div
-          className="flex items-end gap-2 rounded-[22px] border pl-3.5 pr-1.5 py-1.5"
-          style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}
-        >
-          <textarea
-            data-testid="concierge-input"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Ask the concierge…"
-            disabled={sending}
-            rows={1}
-            className="flex-1 bg-transparent outline-none text-[15px] py-2 resize-none max-h-[120px]"
-            style={{ color: colors.text.primary }}
-          />
-          <button
-            data-testid="concierge-send"
-            onClick={() => send()}
-            disabled={sending || !input.trim()}
-            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: colors.brand.maroon, opacity: sending || !input.trim() ? 0.5 : 1 }}
+      <div className="shrink-0 border-t" style={{ borderColor: colors.border.subtle, backgroundColor: colors.bg.card }}>
+        <div className="max-w-3xl mx-auto w-full px-4 py-3">
+          <div
+            className="flex items-end gap-2 rounded-2xl border pl-4 pr-2 py-2 shadow-card"
+            style={{ backgroundColor: colors.bg.canvas, borderColor: colors.border.subtle }}
           >
-            {sending ? (
-              <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-            ) : (
-              <Send size={16} style={{ color: colors.text.inverse }} />
-            )}
-          </button>
+            <textarea
+              data-testid="concierge-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="Ask the concierge…"
+              disabled={sending}
+              rows={1}
+              className="flex-1 bg-transparent outline-none text-[15px] py-2 resize-none max-h-[120px]"
+              style={{ color: colors.text.primary }}
+            />
+            <button
+              data-testid="concierge-send"
+              onClick={() => send()}
+              disabled={sending || !input.trim()}
+              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+              style={{ backgroundColor: colors.brand.maroon, opacity: sending || !input.trim() ? 0.5 : 1 }}
+            >
+              {sending ? (
+                <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                <Send size={16} style={{ color: colors.text.inverse }} />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -159,30 +159,32 @@ export default function ConciergePage() {
 
 function WelcomeCard({ onPick }) {
   return (
-    <div className="flex flex-col items-center px-2 pt-6 pb-2" data-testid="concierge-welcome">
-      <div
-        className="w-[60px] h-[60px] rounded-full border-[1.5px] flex items-center justify-center mb-3.5"
+    <div className="flex flex-col items-center px-2 pt-8 pb-2" data-testid="concierge-welcome">
+      <span
+        className="w-16 h-16 rounded-2xl border-[1.5px] flex items-center justify-center mb-4"
         style={{ borderColor: colors.brand.gold, backgroundColor: "rgba(212,175,55,0.12)" }}
       >
-        <Sparkles size={24} style={{ color: colors.brand.gold }} />
-      </div>
-      <h2 className="text-[22px] font-bold tracking-tight mb-1.5" style={{ color: colors.brand.maroon }}>At your service.</h2>
-      <p className="text-[13.5px] text-center leading-5 mb-6 px-2" style={{ color: colors.text.secondary }}>
+        <Sparkles size={26} style={{ color: colors.brand.gold }} />
+      </span>
+      <h2 className="font-display text-2xl font-bold mb-1.5" style={{ color: colors.brand.maroon }}>At your service.</h2>
+      <p className="text-[13.5px] text-center leading-5 mb-6 px-2 max-w-md" style={{ color: colors.text.secondary }}>
         I can draft memos, suggest checklists, plan events, or answer questions about household operations.
       </p>
       <p className="text-[10.5px] tracking-[2px] font-bold mb-2.5 self-start" style={{ color: colors.text.muted }}>SUGGESTED ENQUIRIES</p>
-      {STARTERS.map((s, i) => (
-        <button
-          key={i}
-          data-testid={`concierge-starter-${i}`}
-          onClick={() => onPick(s)}
-          className="w-full flex items-center gap-2.5 p-3 rounded-xl border mb-2 text-left transition-colors hover:bg-[rgba(212,175,55,0.06)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-          style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}
-        >
-          <MessageSquare size={14} style={{ color: colors.brand.gold }} className="shrink-0" />
-          <span className="flex-1 text-[13px] leading-[18px]" style={{ color: colors.text.secondary }}>{s}</span>
-        </button>
-      ))}
+      <div className="w-full flex flex-col gap-2">
+        {STARTERS.map((s, i) => (
+          <button
+            key={i}
+            data-testid={`concierge-starter-${i}`}
+            onClick={() => onPick(s)}
+            className="w-full flex items-center gap-2.5 p-3.5 rounded-xl border text-left transition-all hover:shadow-card-hover focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+            style={{ backgroundColor: colors.bg.card, borderColor: colors.border.subtle }}
+          >
+            <MessageSquare size={14} style={{ color: colors.brand.gold }} className="shrink-0" />
+            <span className="flex-1 text-[13px] leading-[18px]" style={{ color: colors.text.secondary }}>{s}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -190,16 +192,16 @@ function WelcomeCard({ onPick }) {
 function Bubble({ msg }) {
   const isUser = msg.role === "user";
   return (
-    <div className={`flex items-end gap-2 mb-2.5 ${isUser ? "justify-end" : "justify-start"}`} data-testid={`msg-${msg.role}`}>
+    <div className={`flex items-end gap-2 mb-3 ${isUser ? "justify-end" : "justify-start"}`} data-testid={`msg-${msg.role}`}>
       {!isUser && (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mb-0.5" style={{ backgroundColor: colors.brand.maroon }}>
-          <Sparkles size={12} style={{ color: colors.brand.gold }} />
-        </div>
+        <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-0.5" style={{ backgroundColor: colors.brand.maroon }}>
+          <Sparkles size={13} style={{ color: colors.brand.gold }} />
+        </span>
       )}
       <div
-        className={`max-w-[78%] px-3.5 py-3 rounded-2xl ${isUser ? "rounded-br-sm" : "rounded-bl-sm border"}`}
+        className={`max-w-[75%] px-4 py-3 rounded-2xl shadow-card ${isUser ? "rounded-br-md" : "rounded-bl-md border"}`}
         style={{
-          backgroundColor: isUser ? colors.brand.maroon : colors.bg.secondary,
+          backgroundColor: isUser ? colors.brand.maroon : colors.bg.card,
           borderColor: isUser ? undefined : colors.border.subtle,
         }}
       >
@@ -213,11 +215,11 @@ function Bubble({ msg }) {
 
 function TypingBubble() {
   return (
-    <div className="flex items-end gap-2 mb-2.5 justify-start">
-      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mb-0.5" style={{ backgroundColor: colors.brand.maroon }}>
-        <Sparkles size={12} style={{ color: colors.brand.gold }} />
-      </div>
-      <div className="px-3.5 py-3 rounded-2xl rounded-bl-sm border" style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}>
+    <div className="flex items-end gap-2 mb-3 justify-start">
+      <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-0.5" style={{ backgroundColor: colors.brand.maroon }}>
+        <Sparkles size={13} style={{ color: colors.brand.gold }} />
+      </span>
+      <div className="px-4 py-3 rounded-2xl rounded-bl-md border shadow-card" style={{ backgroundColor: colors.bg.card, borderColor: colors.border.subtle }}>
         <div className="flex gap-1 py-1">
           <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: colors.brand.maroon }} />
           <span className="w-1.5 h-1.5 rounded-full animate-pulse opacity-60" style={{ backgroundColor: colors.brand.maroon, animationDelay: "0.2s" }} />

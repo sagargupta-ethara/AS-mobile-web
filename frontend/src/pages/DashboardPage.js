@@ -1,21 +1,38 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Hourglass, RefreshCw, AlertTriangle, Plus, UserPlus, Archive, Clock, Sparkles, Coffee, Home } from "lucide-react";
+import {
+  Hourglass, RefreshCw, AlertTriangle, Plus, UserPlus, Archive, Clock,
+  Sparkles, Coffee, ClipboardList, Library, Users, CheckCircle2, ArrowRight, ChevronRight,
+} from "lucide-react";
+import {
+  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+} from "recharts";
 import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/apiClient";
 import { colors } from "@/theme/colors";
 import TaskCard from "@/components/TaskCard";
+import { Page, Card, StatTile, SectionCard, Spinner, Button, Avatar } from "@/components/ui-kit";
 
 function getGreeting() {
   const h = new Date().getHours();
-  if (h < 12) return "GOOD MORNING";
-  if (h < 17) return "GOOD AFTERNOON";
-  return "GOOD EVENING";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
 }
 
-function initials(name) {
-  return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase() || "").join("");
-}
+const STATUS_META = {
+  pending: { label: "Pending", color: colors.brand.goldDeep },
+  in_progress: { label: "In Progress", color: colors.brand.navy },
+  in_review: { label: "In Review", color: colors.brand.gold },
+  completed: { label: "Completed", color: colors.brand.emerald },
+};
+
+const PRIORITY_META = {
+  low: { label: "Low", color: colors.priority.low },
+  medium: { label: "Medium", color: colors.priority.medium },
+  high: { label: "High", color: colors.priority.high },
+  urgent: { label: "Urgent", color: colors.priority.urgent },
+};
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -28,161 +45,324 @@ export default function DashboardPage() {
     try {
       const [s, t] = await Promise.all([api.get("/stats/dashboard"), api.get("/tasks")]);
       setStats(s);
-      setTasks(t.slice(0, 6));
-    } catch { /* silent */ }
+      setTasks(t);
+    } catch {
+      /* silent */
+    }
   }, []);
 
-  useEffect(() => { load().then(() => setLoading(false)); }, [load]);
+  useEffect(() => {
+    load().then(() => setLoading(false));
+  }, [load]);
 
   const isManager = user?.role === "admin" || user?.role === "manager";
+  const recent = useMemo(() => tasks.slice(0, 6), [tasks]);
+
+  const statusData = useMemo(() => {
+    const counts = { pending: 0, in_progress: 0, in_review: 0, completed: 0 };
+    tasks.forEach((t) => {
+      if (counts[t.overall_status] != null) counts[t.overall_status] += 1;
+    });
+    return Object.entries(STATUS_META)
+      .map(([key, meta]) => ({ name: meta.label, value: counts[key], color: meta.color }))
+      .filter((d) => d.value > 0);
+  }, [tasks]);
+
+  const priorityData = useMemo(() => {
+    const counts = { low: 0, medium: 0, high: 0, urgent: 0 };
+    tasks.forEach((t) => {
+      if (counts[t.priority] != null) counts[t.priority] += 1;
+    });
+    return Object.entries(PRIORITY_META).map(([key, meta]) => ({
+      name: meta.label,
+      count: counts[key],
+      color: meta.color,
+    }));
+  }, [tasks]);
+
+  const kpis = isManager
+    ? [
+        { label: "Pending", value: stats?.active_tasks ?? 0, icon: <Hourglass size={17} />, accent: colors.brand.goldDeep, testId: "stat-pending" },
+        { label: "In Review", value: stats?.in_review ?? 0, icon: <RefreshCw size={17} />, accent: colors.brand.navy, testId: "stat-in-progress" },
+        { label: "Overdue", value: stats?.overdue ?? 0, icon: <AlertTriangle size={17} />, accent: colors.brand.maroon, testId: "stat-overdue" },
+        { label: "Completed", value: stats?.completed_tasks ?? 0, icon: <CheckCircle2 size={17} />, accent: colors.brand.emerald, testId: "summary-completed" },
+        { label: "Total Tasks", value: stats?.total_tasks ?? 0, icon: <ClipboardList size={17} />, accent: colors.brand.maroon, testId: "summary-total-tasks" },
+        { label: "Active Projects", value: stats?.active_projects ?? 0, icon: <Library size={17} />, accent: colors.brand.gold, testId: "summary-projects" },
+        { label: "Taskers", value: stats?.total_taskers ?? 0, icon: <Users size={17} />, accent: colors.brand.navy, testId: "summary-taskers" },
+        { label: "Managers", value: stats?.total_managers ?? 0, icon: <Users size={17} />, accent: colors.brand.emerald, testId: "summary-managers" },
+      ]
+    : [
+        { label: "Pending", value: stats?.active_tasks ?? 0, icon: <Hourglass size={17} />, accent: colors.brand.goldDeep, testId: "stat-pending" },
+        { label: "In Review", value: stats?.in_review ?? 0, icon: <RefreshCw size={17} />, accent: colors.brand.navy, testId: "stat-in-progress" },
+        { label: "Completed", value: stats?.completed_tasks ?? 0, icon: <CheckCircle2 size={17} />, accent: colors.brand.emerald, testId: "summary-completed" },
+        { label: "Overdue", value: stats?.overdue ?? 0, icon: <AlertTriangle size={17} />, accent: colors.brand.maroon, testId: "stat-overdue" },
+      ];
+
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="pb-24">
-      {/* Hero */}
-      <div className="relative px-5 pt-8 pb-5 rounded-b-3xl overflow-hidden" style={{ background: `linear-gradient(135deg, ${colors.brand.maroonDeep}, ${colors.brand.maroon})` }}>
-        <div className="relative z-10">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <p className="text-[10.5px] tracking-[3px] font-bold mb-2" style={{ color: colors.brand.gold }} data-testid="dashboard-overline">{getGreeting()}</p>
-              <h1 className="text-[26px] font-semibold tracking-tight mb-2" style={{ color: colors.text.inverse }} data-testid="dashboard-user-name">{user?.name}</h1>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] tracking-[1.5px] font-bold" style={{ borderColor: colors.border.medium, backgroundColor: "rgba(212,175,55,0.15)", color: colors.brand.gold }}>
-                <Sparkles size={11} />
-                {(user?.role || "").toUpperCase()}
-              </span>
-            </div>
-            <div className="w-11 h-11 rounded-full border flex items-center justify-center" style={{ borderColor: colors.brand.gold }}>
-              <Home size={20} style={{ color: colors.brand.gold }} />
-            </div>
+    <Page testId="dashboard-page">
+      {/* Header banner */}
+      <Card
+        className="relative overflow-hidden mb-7 px-6 py-6 md:px-8 md:py-7"
+        style={{ background: `linear-gradient(120deg, ${colors.brand.maroonDeep}, ${colors.brand.maroon} 70%)`, borderColor: colors.brand.maroon }}
+      >
+        <div
+          className="absolute -right-16 -top-16 w-64 h-64 rounded-full opacity-[0.08]"
+          style={{ background: `radial-gradient(circle, ${colors.brand.gold}, transparent 70%)` }}
+        />
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-5">
+          <div className="min-w-0">
+            <p className="text-[10.5px] tracking-[3px] font-bold uppercase mb-2" style={{ color: colors.brand.gold }} data-testid="dashboard-overline">
+              {getGreeting()} · {today}
+            </p>
+            <h1 className="font-display text-[28px] md:text-[36px] font-bold leading-none" style={{ color: colors.text.inverse }} data-testid="dashboard-user-name">
+              {user?.name}
+            </h1>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide mt-3"
+              style={{ backgroundColor: "rgba(212,175,55,0.16)", color: colors.brand.gold, border: `1px solid ${colors.border.medium}` }}
+            >
+              <Sparkles size={11} />
+              {user?.role}
+            </span>
           </div>
-          <div className="grid grid-cols-3 gap-2.5">
-            <StatCard label="Pending" value={stats?.active_tasks ?? 0} icon={<Hourglass size={16} />} testId="stat-pending" />
-            <StatCard label="In Review" value={stats?.in_review ?? 0} icon={<RefreshCw size={16} />} testId="stat-in-progress" />
-            <StatCard label="Overdue" value={stats?.overdue ?? 0} icon={<AlertTriangle size={16} />} highlight testId="stat-overdue" />
-          </div>
+          {isManager && (
+            <div className="flex items-center gap-2.5">
+              <button
+                data-testid="quick-new-task"
+                onClick={() => navigate("/tasks/new")}
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-xl text-[13.5px] font-bold transition-all hover:shadow-card-hover focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                style={{ backgroundColor: colors.bg.card, color: colors.brand.maroon }}
+              >
+                <Plus size={17} /> New Task
+              </button>
+              <button
+                data-testid="quick-add-staff"
+                onClick={() => navigate("/staff/new")}
+                className="inline-flex items-center gap-2 h-11 px-4 rounded-xl text-[13.5px] font-bold transition-all hover:shadow-card-hover focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                style={{ backgroundColor: "rgba(253,251,247,0.12)", color: colors.text.inverse, border: `1px solid ${colors.border.medium}` }}
+              >
+                <UserPlus size={17} /> Add Member
+              </button>
+            </div>
+          )}
         </div>
+      </Card>
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5 md:gap-4 mb-7">
+        {kpis.map((k) => (
+          <StatTile key={k.testId} {...k} />
+        ))}
       </div>
 
-      <div className="px-5 pt-5">
-        {isManager && (
-          <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-              <SummaryTile label="Total Tasks" value={stats?.total_tasks ?? 0} accent={colors.brand.navy} testId="summary-total-tasks" />
-              <SummaryTile label="Completed" value={stats?.completed_tasks ?? 0} accent={colors.brand.emerald} testId="summary-completed" />
-              <SummaryTile label="Active Projects" value={stats?.active_projects ?? 0} accent={colors.brand.gold} testId="summary-projects" />
-              <SummaryTile label="Taskers" value={stats?.total_taskers ?? 0} accent={colors.brand.maroon} testId="summary-taskers" />
+      {/* Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 mb-7">
+        <SectionCard title="Task Status" className="lg:col-span-1" testId="chart-status">
+          {statusData.length === 0 ? (
+            <ChartEmpty label="No tasks yet" />
+          ) : (
+            <div className="relative">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={56} outerRadius={82} paddingAngle={2} stroke="none">
+                    {statusData.map((d) => (
+                      <Cell key={d.name} fill={d.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="font-display text-[28px] font-bold leading-none" style={{ color: colors.brand.maroon }}>
+                  {tasks.length}
+                </span>
+                <span className="text-[10px] tracking-[1px] font-bold uppercase" style={{ color: colors.text.muted }}>
+                  Tasks
+                </span>
+              </div>
             </div>
+          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4">
+            {statusData.map((d) => (
+              <span key={d.name} className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: colors.text.secondary }}>
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                {d.name} · {d.value}
+              </span>
+            ))}
+          </div>
+        </SectionCard>
 
-            {user?.role === "admin" && stats && stats.top_taskers?.length > 0 && (
-              <div className="rounded-[14px] p-3.5 border mb-5" style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}>
-                <p className="text-[10.5px] tracking-[2.5px] font-bold mb-3" style={{ color: colors.text.secondary }}>TOP PERFORMERS</p>
-                {stats.top_taskers.slice(0, 3).map((t, idx) => (
+        <SectionCard title="Tasks by Priority" className="lg:col-span-2" testId="chart-priority">
+          <ResponsiveContainer width="100%" height={244}>
+            <BarChart data={priorityData} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(123,24,30,0.08)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: colors.text.muted, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: colors.text.muted }} axisLine={false} tickLine={false} width={38} />
+              <Tooltip cursor={{ fill: "rgba(212,175,55,0.08)" }} contentStyle={tooltipStyle} />
+              <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={64}>
+                {priorityData.map((d) => (
+                  <Cell key={d.name} fill={d.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </SectionCard>
+      </div>
+
+      {/* Main split: recent tasks + side rail */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+        <div className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-3.5">
+            <h2 className="font-display text-[18px] font-bold" style={{ color: colors.brand.maroon }}>
+              Recent Tasks
+            </h2>
+            <button
+              data-testid="see-all-tasks"
+              onClick={() => navigate("/tasks")}
+              className="inline-flex items-center gap-1 text-[12.5px] font-bold focus:outline-none"
+              style={{ color: colors.brand.goldDeep }}
+            >
+              View all <ArrowRight size={14} />
+            </button>
+          </div>
+          {loading ? (
+            <Spinner className="py-14" />
+          ) : recent.length === 0 ? (
+            <Card className="flex flex-col items-center py-14 gap-2">
+              <Coffee size={40} style={{ color: colors.brand.gold }} />
+              <p className="font-display text-lg font-bold" style={{ color: colors.brand.maroon }}>
+                All clear
+              </p>
+              <p className="text-[13px]" style={{ color: colors.text.secondary }}>
+                No tasks to show right now.
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {recent.map((t) => (
+                <TaskCard key={t.id} task={t} showAssignees={isManager} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Side rail */}
+        <div className="flex flex-col gap-4 md:gap-5">
+          {user?.role === "admin" && stats?.top_taskers?.length > 0 && (
+            <SectionCard title="Top Performers" testId="top-performers">
+              <div className="flex flex-col gap-1">
+                {stats.top_taskers.slice(0, 5).map((t, idx) => (
                   <button
                     key={t.id}
                     data-testid={`top-tasker-${t.id}`}
                     onClick={() => navigate(`/team/${t.id}`)}
-                    className="w-full flex items-center gap-2.5 py-2 text-left hover:bg-[rgba(212,175,55,0.08)] rounded-lg transition-colors focus:outline-none focus:ring-1 focus:ring-[#D4AF37]"
+                    className="flex items-center gap-3 py-2 px-1.5 -mx-1.5 rounded-xl text-left transition-colors hover:bg-[rgba(212,175,55,0.08)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   >
-                    <span className="text-sm font-extrabold w-6" style={{ color: colors.brand.gold }}>#{idx + 1}</span>
-                    <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: colors.brand.maroon, color: colors.text.inverse }}>
-                      {initials(t.name)}
-                    </div>
+                    <span className="w-5 font-display text-[15px] font-bold text-center" style={{ color: colors.brand.gold }}>
+                      {idx + 1}
+                    </span>
+                    <Avatar name={t.name} role={t.role} size={34} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13.5px] font-bold truncate" style={{ color: colors.text.primary }}>{t.name}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: colors.text.muted }}>{t.completed} completed</p>
+                      <p className="text-[13px] font-bold truncate" style={{ color: colors.text.primary }}>
+                        {t.name}
+                      </p>
+                      <p className="text-[11px]" style={{ color: colors.text.muted }}>
+                        {t.completed} completed
+                      </p>
                     </div>
-                    <span className="flex items-center gap-1">
-                      <span className="text-sm" style={{ color: colors.brand.gold }}>★</span>
-                      <span className="text-[13px] font-bold" style={{ color: colors.text.primary }}>{t.avg_rating.toFixed(1)}</span>
+                    <span className="inline-flex items-center gap-1 text-[13px] font-bold" style={{ color: colors.text.primary }}>
+                      <span style={{ color: colors.brand.gold }}>★</span>
+                      {t.avg_rating.toFixed(1)}
                     </span>
                   </button>
                 ))}
               </div>
-            )}
+            </SectionCard>
+          )}
 
-            <div className="flex gap-2.5 mb-5">
-              <button data-testid="quick-new-task" onClick={() => navigate("/tasks/new")} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ backgroundColor: colors.brand.maroon, color: colors.text.inverse }}>
-                <Plus size={18} /> New Task
-              </button>
-              <button data-testid="quick-add-staff" onClick={() => navigate("/staff/new")} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl border text-sm font-bold transition-colors hover:bg-[rgba(212,175,55,0.08)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ borderColor: colors.brand.gold, color: colors.brand.maroon }}>
-                <UserPlus size={18} /> Add Member
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5 mb-5">
-              <button data-testid="open-review-queue" onClick={() => navigate("/reviews")} className="text-left p-3.5 rounded-[14px] border transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: "rgba(212,119,10,0.15)" }}>
-                  <Hourglass size={18} style={{ color: "#D4770A" }} />
-                </div>
-                <p className="text-sm font-bold" style={{ color: colors.brand.maroon }}>Review Queue</p>
-                <p className="text-[11.5px] font-semibold" style={{ color: colors.text.secondary }}>{stats?.in_review ?? 0} awaiting</p>
-              </button>
-              <button data-testid="open-history" onClick={() => navigate("/history")} className="text-left p-3.5 rounded-[14px] border transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: "rgba(30,58,95,0.15)" }}>
-                  <Archive size={18} style={{ color: colors.brand.navy }} />
-                </div>
-                <p className="text-sm font-bold" style={{ color: colors.brand.maroon }}>History</p>
-                <p className="text-[11.5px] font-semibold" style={{ color: colors.text.secondary }}>Tasks & Projects</p>
-              </button>
-            </div>
-          </>
-        )}
-
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-bold" style={{ color: colors.brand.maroon }}>Recent Tasks</h2>
-          <button data-testid="see-all-tasks" onClick={() => navigate("/tasks")} className="text-xs font-bold tracking-[0.5px] focus:outline-none hover:underline" style={{ color: colors.brand.gold }}>See all →</button>
+          <SectionCard title="Quick Access" bodyClassName="p-3">
+            <QuickLink
+              testId="open-review-queue"
+              icon={<Hourglass size={18} />}
+              tint="rgba(212,119,10,0.14)"
+              iconColor={colors.priority.high}
+              label="Review Queue"
+              hint="Submissions awaiting your review"
+              onClick={() => navigate("/reviews")}
+            />
+            <QuickLink
+              testId="open-history"
+              icon={<Archive size={18} />}
+              tint="rgba(0,0,128,0.12)"
+              iconColor={colors.brand.navy}
+              label="History"
+              hint="Completed tasks & projects"
+              onClick={() => navigate("/history")}
+            />
+            <QuickLink
+              testId="open-concierge"
+              icon={<Sparkles size={18} />}
+              tint="rgba(123,24,30,0.10)"
+              iconColor={colors.brand.maroon}
+              label="AI Concierge"
+              hint="Ask about the estate"
+              onClick={() => navigate("/concierge")}
+            />
+          </SectionCard>
         </div>
-
-        {loading ? (
-          <div className="flex justify-center py-10"><span className="animate-spin w-8 h-8 border-3 rounded-full" style={{ borderColor: colors.brand.maroon, borderTopColor: "transparent" }} /></div>
-        ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center py-10 gap-2">
-            <Coffee size={40} style={{ color: colors.brand.gold }} />
-            <p className="text-[17px] font-bold mt-2" style={{ color: colors.brand.maroon }}>All caught up</p>
-            <p className="text-[13px] text-center" style={{ color: colors.text.secondary }}>
-              {isManager ? "Create your first task to get started." : "No tasks assigned to you yet."}
-            </p>
-          </div>
-        ) : (
-          tasks.map((t) => <TaskCard key={t.id} task={t} showAssignees={isManager} />)
-        )}
       </div>
 
+      {/* Mobile-only concierge FAB (kept for small screens) */}
       <button
         data-testid="concierge-fab"
         onClick={() => navigate("/concierge")}
-        className="fixed bottom-5 right-5 md:hidden flex items-center gap-1.5 px-4 py-3 rounded-full shadow-lg transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] z-50"
+        className="fixed bottom-20 right-5 md:hidden flex items-center gap-1.5 px-4 py-3 rounded-full shadow-lg transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-[#D4AF37] z-50"
         style={{ background: `linear-gradient(135deg, ${colors.brand.maroon}, ${colors.brand.maroonDeep})`, border: `1px solid ${colors.brand.gold}` }}
       >
         <Sparkles size={16} style={{ color: colors.brand.gold }} />
-        <span className="text-[13px] font-bold tracking-[0.5px]" style={{ color: colors.text.inverse }}>Concierge</span>
+        <span className="text-[13px] font-bold" style={{ color: colors.text.inverse }}>Concierge</span>
       </button>
+    </Page>
+  );
+}
+
+const tooltipStyle = {
+  borderRadius: 12,
+  border: `1px solid ${colors.border.subtle}`,
+  fontSize: 12,
+  fontWeight: 600,
+  boxShadow: "0 6px 16px -6px rgba(123,24,30,0.2)",
+};
+
+function ChartEmpty({ label }) {
+  return (
+    <div className="flex items-center justify-center h-[200px] text-[13px] font-semibold" style={{ color: colors.text.muted }}>
+      {label}
     </div>
   );
 }
 
-function StatCard({ label, value, icon, highlight, testId }) {
+function QuickLink({ icon, tint, iconColor, label, hint, onClick, testId }) {
   return (
-    <div
+    <button
       data-testid={testId}
-      className="rounded-[14px] border p-3 flex flex-col gap-1"
-      style={{
-        backgroundColor: highlight ? "rgba(212,175,55,0.12)" : "rgba(253,251,247,0.08)",
-        borderColor: highlight ? colors.brand.gold : "rgba(212,175,55,0.35)",
-      }}
+      onClick={onClick}
+      className="w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-colors hover:bg-[rgba(212,175,55,0.08)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
     >
-      <span style={{ color: highlight ? colors.brand.gold : "rgba(253,251,247,0.85)" }}>{icon}</span>
-      <span className="text-[22px] font-bold mt-1" style={{ color: colors.text.inverse }}>{value}</span>
-      <span className="text-[9.5px] tracking-[0.4px] font-bold uppercase" style={{ color: "rgba(253,251,247,0.75)" }}>{label}</span>
-    </div>
-  );
-}
-
-function SummaryTile({ label, value, accent, testId }) {
-  return (
-    <div data-testid={testId} className="relative rounded-xl p-3.5 border overflow-hidden" style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}>
-      <div className="absolute top-0 left-0 bottom-0 w-[3px]" style={{ backgroundColor: accent }} />
-      <p className="text-[26px] font-bold mb-0.5" style={{ color: colors.brand.maroon }}>{value}</p>
-      <p className="text-[11px] tracking-[1.2px] font-bold uppercase" style={{ color: colors.text.secondary }}>{label}</p>
-    </div>
+      <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: tint, color: iconColor }}>
+        {icon}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13.5px] font-bold" style={{ color: colors.text.primary }}>
+          {label}
+        </p>
+        <p className="text-[11.5px] truncate" style={{ color: colors.text.muted }}>
+          {hint}
+        </p>
+      </div>
+      <ChevronRight size={16} style={{ color: colors.text.muted }} />
+    </button>
   );
 }

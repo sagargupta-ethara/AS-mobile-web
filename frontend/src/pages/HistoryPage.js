@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { api } from "@/apiClient";
 import { colors } from "@/theme/colors";
 import { RatingStars } from "@/components/Pills";
+import { Page, PageHeader, Card, Spinner, EmptyState, FilterChips, IconButton } from "@/components/ui-kit";
 
 export default function HistoryPage() {
   const navigate = useNavigate();
@@ -44,81 +45,69 @@ export default function HistoryPage() {
 
   const isManager = user?.role === "admin" || user?.role === "manager";
 
+  const modeOptions = [
+    { key: "tasks", label: `Tasks (${completedTasks.length})` },
+    { key: "projects", label: `Projects (${closedProjects.length})` },
+  ];
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: colors.bg.primary }}>
-      <div
-        className="relative px-4 pt-5 pb-4 rounded-b-[22px] overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${colors.brand.maroonDeep}, ${colors.brand.maroon})` }}
-      >
-        <div className="flex items-center gap-2.5 mb-3">
-          <button
-            data-testid="history-back"
+    <Page testId="history-page">
+      <PageHeader
+        overline="Estate Archive"
+        title="History"
+        testId="history-title"
+        icon={<Archive size={20} />}
+        subtitle={
+          loading
+            ? undefined
+            : mode === "tasks"
+            ? `${completedTasks.length} completed ${completedTasks.length === 1 ? "task" : "tasks"}`
+            : `${closedProjects.length} closed ${closedProjects.length === 1 ? "project" : "projects"}`
+        }
+        actions={
+          <IconButton
+            testId="history-back"
+            icon={<ChevronLeft size={18} />}
+            label="Back"
+            variant="outline"
+            size={38}
             onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-            style={{ backgroundColor: "rgba(253,251,247,0.12)" }}
-          >
-            <ChevronLeft size={22} style={{ color: colors.text.inverse }} />
-          </button>
-          <div className="flex-1">
-            <p className="text-[10px] tracking-[2.2px] font-bold" style={{ color: colors.brand.gold }}>ROYAL ARCHIVES</p>
-            <h1 className="text-[22px] font-bold tracking-tight mt-0.5" style={{ color: colors.text.inverse }}>History</h1>
-          </div>
-          <div
-            className="w-10 h-10 rounded-full border flex items-center justify-center"
-            style={{ borderColor: colors.brand.gold, backgroundColor: "rgba(212,175,55,0.15)" }}
-          >
-            <Archive size={17} style={{ color: colors.brand.gold }} />
-          </div>
-        </div>
+          />
+        }
+      />
 
-        <div
-          className="flex gap-1 p-1 rounded-full border"
-          style={{ backgroundColor: "rgba(0,0,0,0.25)", borderColor: "rgba(212,175,55,0.35)" }}
-        >
-          <ToggleBtn label="Tasks" count={completedTasks.length} active={mode === "tasks"} onClick={() => setMode("tasks")} testId="history-toggle-tasks" />
-          <ToggleBtn label="Projects" count={closedProjects.length} active={mode === "projects"} onClick={() => setMode("projects")} testId="history-toggle-projects" />
-        </div>
+      <div className="mb-5">
+        <FilterChips items={modeOptions} value={mode} onChange={setMode} testIdPrefix="history-toggle" />
       </div>
 
-      <div className="p-4">
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <span className="animate-spin w-8 h-8 border-3 rounded-full" style={{ borderColor: colors.brand.maroon, borderTopColor: "transparent" }} />
-          </div>
-        ) : mode === "tasks" ? (
-          completedTasks.length === 0 ? (
-            <EmptyState icon={<CheckCheck size={30} style={{ color: colors.brand.gold }} />} title="No completed tasks yet" sub={isManager ? "Approved tasks will appear here once your team completes them." : "Once your submissions are approved, they show up here."} />
-          ) : (
-            completedTasks.map((t) => <TaskHistoryRow key={t.id} task={t} onClick={() => navigate(`/tasks/${t.id}`)} />)
-          )
+      {loading ? (
+        <Spinner />
+      ) : mode === "tasks" ? (
+        completedTasks.length === 0 ? (
+          <EmptyState
+            testId="history-tasks-empty"
+            icon={<CheckCheck size={30} />}
+            title="No completed tasks yet"
+            message={isManager ? "Approved tasks will appear here once your team completes them." : "Once your submissions are approved, they show up here."}
+          />
         ) : (
-          closedProjects.length === 0 ? (
-            <EmptyState icon={<Library size={30} style={{ color: colors.brand.gold }} />} title="No closed projects yet" sub="Closed projects with final ratings will be archived here." />
-          ) : (
-            closedProjects.map((p) => <ProjectHistoryRow key={p.id} project={p} onClick={() => navigate(`/projects/${p.id}`)} />)
-          )
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ToggleBtn({ label, count, active, onClick, testId }) {
-  return (
-    <button
-      data-testid={testId}
-      onClick={onClick}
-      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-xs font-bold tracking-[1px] uppercase transition-colors focus:outline-none"
-      style={{ backgroundColor: active ? colors.text.inverse : "transparent", color: active ? colors.brand.maroon : "rgba(253,251,247,0.75)" }}
-    >
-      {label}
-      <span
-        className="inline-flex items-center justify-center min-w-[22px] h-[18px] px-1.5 rounded-full text-[10px] font-extrabold"
-        style={{ backgroundColor: active ? colors.brand.gold : "rgba(212,175,55,0.28)", color: active ? colors.brand.maroonDeep : colors.brand.gold }}
-      >
-        {count}
-      </span>
-    </button>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {completedTasks.map((t) => <TaskHistoryRow key={t.id} task={t} onClick={() => navigate(`/tasks/${t.id}`)} />)}
+          </div>
+        )
+      ) : closedProjects.length === 0 ? (
+        <EmptyState
+          testId="history-projects-empty"
+          icon={<Library size={30} />}
+          title="No closed projects yet"
+          message="Closed projects with final ratings will be archived here."
+        />
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {closedProjects.map((p) => <ProjectHistoryRow key={p.id} project={p} onClick={() => navigate(`/projects/${p.id}`)} />)}
+        </div>
+      )}
+    </Page>
   );
 }
 
@@ -131,86 +120,63 @@ function TaskHistoryRow({ task, onClick }) {
   const approvedAt = task.assignments.find((a) => a.approved_at)?.approved_at || task.updated_at;
 
   return (
-    <button
-      data-testid={`history-task-${task.id}`}
-      onClick={onClick}
-      className="w-full flex items-center gap-3 p-3.5 rounded-[14px] border mb-2.5 text-left transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-      style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}
-    >
-      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(9,121,105,0.15)" }}>
+    <Card testId={`history-task-${task.id}`} onClick={onClick} className="p-4 flex items-center gap-3.5">
+      <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(9,121,105,0.12)" }}>
         <CheckCheck size={18} style={{ color: colors.brand.emerald }} />
-      </div>
+      </span>
       <div className="flex-1 min-w-0">
         <p className="text-[14.5px] font-bold truncate" style={{ color: colors.text.primary }}>{task.title}</p>
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          {task.project_name && (
-            <>
-              <FolderOpen size={11} style={{ color: colors.text.muted }} />
-              <span className="text-[11.5px] font-semibold truncate max-w-[120px]" style={{ color: colors.text.muted }}>{task.project_name}</span>
-              <span className="text-[11px] mx-0.5" style={{ color: colors.text.muted }}>·</span>
-            </>
-          )}
-          <Users size={11} style={{ color: colors.text.muted }} />
-          <span className="text-[11.5px] font-semibold" style={{ color: colors.text.muted }}>
-            {task.assignments.length} {task.assignments.length === 1 ? "assignee" : "assignees"}
-          </span>
-          <span className="text-[11px] mx-0.5" style={{ color: colors.text.muted }}>·</span>
-          <span className="text-[11.5px] font-semibold" style={{ color: colors.text.muted }}>
-            {new Date(approvedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-          </span>
+        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+          {task.project_name && <Chip icon={<FolderOpen size={11} />} label={task.project_name} />}
+          <Chip icon={<Users size={11} />} label={`${task.assignments.length} ${task.assignments.length === 1 ? "assignee" : "assignees"}`} />
+          <Chip
+            icon={<Calendar size={11} />}
+            label={new Date(approvedAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
+          />
         </div>
       </div>
       {avgRating != null ? (
         <RatingStars value={avgRating} size={12} showValue />
       ) : (
-        <ChevronRight size={16} style={{ color: colors.text.muted }} />
+        <ChevronRight size={16} style={{ color: colors.text.muted }} className="shrink-0" />
       )}
-    </button>
+    </Card>
   );
 }
 
 function ProjectHistoryRow({ project, onClick }) {
   return (
-    <button
-      data-testid={`history-project-${project.id}`}
-      onClick={onClick}
-      className="w-full flex items-center gap-3 p-3.5 rounded-[14px] border mb-2.5 text-left transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-      style={{ backgroundColor: colors.bg.secondary, borderColor: colors.border.subtle }}
-    >
-      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,175,55,0.15)" }}>
+    <Card testId={`history-project-${project.id}`} onClick={onClick} className="p-4 flex items-center gap-3.5">
+      <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(212,175,55,0.15)" }}>
         <Library size={18} style={{ color: colors.brand.gold }} />
-      </div>
+      </span>
       <div className="flex-1 min-w-0">
         <p className="text-[14.5px] font-bold truncate" style={{ color: colors.text.primary }}>{project.name}</p>
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          <CheckCheck size={11} style={{ color: colors.brand.emerald }} />
-          <span className="text-[11.5px] font-semibold" style={{ color: colors.text.muted }}>
-            {project.completed_task_count}/{project.task_count} tasks
-          </span>
-          <span className="text-[11px] mx-0.5" style={{ color: colors.text.muted }}>·</span>
-          <Calendar size={11} style={{ color: colors.text.muted }} />
-          <span className="text-[11.5px] font-semibold" style={{ color: colors.text.muted }}>
-            Closed {project.closed_at ? new Date(project.closed_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
-          </span>
+        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+          <Chip icon={<CheckCheck size={11} />} label={`${project.completed_task_count}/${project.task_count} tasks`} />
+          <Chip
+            icon={<Calendar size={11} />}
+            label={`Closed ${project.closed_at ? new Date(project.closed_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}`}
+          />
         </div>
       </div>
       {project.final_rating != null ? (
         <RatingStars value={project.final_rating} size={12} showValue />
       ) : (
-        <ChevronRight size={16} style={{ color: colors.text.muted }} />
+        <ChevronRight size={16} style={{ color: colors.text.muted }} className="shrink-0" />
       )}
-    </button>
+    </Card>
   );
 }
 
-function EmptyState({ icon, title, sub }) {
+function Chip({ icon, label }) {
   return (
-    <div className="flex flex-col items-center py-10 mt-10 gap-2">
-      <div className="w-[68px] h-[68px] rounded-full flex items-center justify-center mb-1.5" style={{ backgroundColor: "rgba(212,175,55,0.15)" }}>
-        {icon}
-      </div>
-      <p className="text-base font-bold" style={{ color: colors.text.primary }}>{title}</p>
-      <p className="text-[13px] text-center leading-[19px] px-5" style={{ color: colors.text.muted }}>{sub}</p>
-    </div>
+    <span
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold border max-w-[160px]"
+      style={{ backgroundColor: colors.bg.cardMuted, borderColor: colors.border.subtle, color: colors.text.secondary }}
+    >
+      <span style={{ color: colors.brand.gold }}>{icon}</span>
+      <span className="truncate">{label}</span>
+    </span>
   );
 }

@@ -4,6 +4,11 @@ export const colors = {
     secondary: "#F5F0E6",
     tertiary: "#EBE3D5",
     dark: "#1A1210",
+    // Web-only surfaces for the desktop redesign
+    canvas: "#FBF8F2",
+    card: "#FFFFFF",
+    cardMuted: "#FBF9F4",
+    sidebar: "#FFFFFF",
   },
   brand: {
     maroon: "#7B181E",
@@ -39,6 +44,16 @@ export const colors = {
     urgent: "#7B181E",
   },
 };
+
+// Ordered, accessible palette for data viz (recharts) — brand-led, distinct hues
+export const chartPalette = [
+  "#7B181E", // maroon
+  "#D4AF37", // gold
+  "#000080", // navy
+  "#097969", // emerald
+  "#D4770A", // amber
+  "#8A6D3B", // bronze
+];
 
 export const AUTH_BG =
   "https://images.pexels.com/photos/35832668/pexels-photo-35832668.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
