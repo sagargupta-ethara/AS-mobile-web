@@ -570,6 +570,12 @@ async def login(body: LoginBody):
 async def me(user: UserPublic = Depends(get_current_user)):
     return user
 
+@api.post("/auth/refresh", response_model=Token)
+async def refresh_token(user: UserPublic = Depends(get_current_user)):
+    """Issue a fresh JWT for the currently authenticated user. Requires a valid (non-expired) Bearer."""
+    token = create_access_token(user.id, user.role)
+    return Token(access_token=token, user=user)
+
 # ------------------------------------------------------------------
 # Users / Team
 # ------------------------------------------------------------------
@@ -1005,9 +1011,15 @@ async def assignment_review(task_id: str, assignment_id: str, body: ReviewBody,
     doc = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Not found")
-    # Only creator or admin can review
-    if user.role != "admin" and doc["created_by"] != user.id:
-        raise HTTPException(403, "Only creator or admin can review")
+    # Admin, task creator, or a manager of the task's project can review
+    is_admin = user.role == "admin"
+    is_creator = doc.get("created_by") == user.id
+    is_project_manager = False
+    if doc.get("project_id"):
+        proj = await db.projects.find_one({"id": doc["project_id"]}, {"_id": 0, "manager_ids": 1})
+        is_project_manager = bool(proj and user.id in (proj.get("manager_ids") or []))
+    if not (is_admin or is_creator or is_project_manager):
+        raise HTTPException(403, "Only creator, admin, or project manager can review")
     a = _find_assignment(doc, assignment_id)
     if not a:
         raise HTTPException(404, "Assignment not found")
@@ -1093,10 +1105,26 @@ async def dashboard_stats(user: UserPublic = Depends(get_current_user)):
             active += 1
             if any(a.get("status") == "submitted" for a in assigns):
                 in_review += 1
-            if t.get("due_date") and t["due_date"] < now:
-                overdue += 1
+            due = t.get("due_date")
+            if due:
+                # Legacy docs may be offset-naive; treat as UTC
+                if due.tzinfo is None:
+                    due = due.replace(tzinfo=timezone.utc)
+                if due < now:
+                    overdue += 1
     total_projects = await db.projects.count_documents({})
     active_projects = await db.projects.count_documents({"status": {"$ne": "closed"}})
+    if user.role != "admin":
+        # Scope project counts to projects the caller participates in (matches GET /projects rule)
+        project_scope = {"$or": [
+            {"manager_ids": user.id},
+            {"tasker_ids": user.id},
+            {"created_by": user.id},
+        ]}
+        total_projects = await db.projects.count_documents(project_scope)
+        active_projects = await db.projects.count_documents(
+            {"$and": [project_scope, {"status": {"$ne": "closed"}}]}
+        )
     total_taskers = await db.users.count_documents({"role": "tasker"})
     total_managers = await db.users.count_documents({"role": "manager"})
 
@@ -1402,7 +1430,14 @@ async def pending_reviews(user: UserPublic = Depends(get_current_user)):
         return []
     q: Dict[str, Any] = {"assignments.status": "submitted"}
     if user.role == "manager":
-        q["created_by"] = user.id
+        # Managers see submissions from tasks they created OR tasks in projects they manage
+        project_ids = [
+            p["id"] async for p in db.projects.find({"manager_ids": user.id}, {"_id": 0, "id": 1})
+        ]
+        q["$or"] = [
+            {"created_by": user.id},
+            {"project_id": {"$in": project_ids}},
+        ]
     docs = await db.tasks.find(q, {"_id": 0}).sort("updated_at", -1).to_list(500)
     out: List[PendingReview] = []
     for t in docs:

@@ -1,3 +1,5 @@
+import { jwtDecode } from "jwt-decode";
+
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const TOKEN_KEY = "scindia_token";
 
@@ -11,6 +13,47 @@ function emitLogout() {
   window.dispatchEvent(new Event(AUTH_LOGOUT_EVENT));
 }
 
+/* ---------- silent-refresh scheduler ---------- */
+const REFRESH_LEAD_MS = 5 * 60 * 1000; // fire 5 minutes before expiry
+const MAX_TIMEOUT_MS = 2_147_483_000; // stay under int32 setTimeout limit
+let refreshTimer = null;
+
+function decodeExp(token) {
+  try {
+    const { exp } = jwtDecode(token);
+    return typeof exp === "number" ? exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function cancelTokenRefresh() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+export function scheduleTokenRefresh(token) {
+  cancelTokenRefresh();
+  if (!token) return;
+  const expMs = decodeExp(token);
+  if (!expMs) return;
+  const raw = expMs - Date.now() - REFRESH_LEAD_MS;
+  const delay = Math.min(Math.max(raw, 5_000), MAX_TIMEOUT_MS);
+  refreshTimer = setTimeout(async () => {
+    try {
+      const resp = await request("POST", "/auth/refresh", null, true);
+      if (resp && resp.access_token) {
+        saveToken(resp.access_token);
+        scheduleTokenRefresh(resp.access_token);
+      }
+    } catch {
+      // request() already handled 401 by clearing token + emitting logout
+    }
+  }, delay);
+}
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -21,6 +64,7 @@ export function saveToken(token) {
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  cancelTokenRefresh();
 }
 
 async function request(method, path, body, auth = true) {

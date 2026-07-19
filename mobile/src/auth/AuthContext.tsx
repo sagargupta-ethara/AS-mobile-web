@@ -6,8 +6,9 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { api, saveToken, clearToken, User } from "@/src/api/client";
+import { api, saveToken, clearToken, scheduleTokenRefresh, refreshIfExpiringSoon, User } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
+import { AppState, AppStateStatus } from "react-native";
 
 interface AuthContextValue {
   user: User | null;
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const me = await api.get<User>("/auth/me");
       setUser(me);
+      scheduleTokenRefresh(token);
     } catch {
       setUser(null);
       await clearToken();
@@ -46,6 +48,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refresh]);
 
+  /* On foreground, refresh token if it expires within 10 minutes */
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") {
+        refreshIfExpiringSoon();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     const resp = await api.post<{ access_token: string; user: User }>(
       "/auth/login",
@@ -53,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       false
     );
     await saveToken(resp.access_token);
+    scheduleTokenRefresh(resp.access_token);
     setUser(resp.user);
     return resp.user;
   }, []);

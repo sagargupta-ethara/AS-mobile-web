@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, saveToken, clearToken, getToken, onAuthLogout } from "@/apiClient";
+import { api, saveToken, clearToken, getToken, onAuthLogout, scheduleTokenRefresh } from "@/apiClient";
 
 const AuthContext = createContext(null);
 
@@ -16,6 +16,7 @@ export function AuthProvider({ children }) {
       }
       const me = await api.get("/auth/me");
       setUser(me);
+      scheduleTokenRefresh(token);
     } catch {
       setUser(null);
       clearToken();
@@ -43,6 +44,7 @@ export function AuthProvider({ children }) {
       false
     );
     saveToken(resp.access_token);
+    scheduleTokenRefresh(resp.access_token);
     setUser(resp.user);
     return resp.user;
   }, []);

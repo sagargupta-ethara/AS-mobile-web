@@ -1,4 +1,5 @@
 import { storage } from "@/src/utils/storage";
+import { jwtDecode } from "jwt-decode";
 
 const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TOKEN_KEY = "scindia_token";
@@ -12,7 +13,71 @@ export async function saveToken(token: string) {
 }
 
 export async function clearToken() {
+  cancelTokenRefresh();
   await storage.secureRemove(TOKEN_KEY);
+}
+
+/* ---------- silent-refresh scheduler ---------- */
+const REFRESH_LEAD_MS = 5 * 60 * 1000; // fire 5 min before expiry
+const MAX_TIMEOUT_MS = 2_147_483_000; // stay under int32 setTimeout limit
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function decodeExpMs(token: string): number {
+  try {
+    const { exp } = jwtDecode<{ exp?: number }>(token);
+    return typeof exp === "number" ? exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function cancelTokenRefresh() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+export function scheduleTokenRefresh(token: string | null | undefined) {
+  cancelTokenRefresh();
+  if (!token) return;
+  const expMs = decodeExpMs(token);
+  if (!expMs) return;
+  const raw = expMs - Date.now() - REFRESH_LEAD_MS;
+  const delay = Math.min(Math.max(raw, 5_000), MAX_TIMEOUT_MS);
+  refreshTimer = setTimeout(async () => {
+    try {
+      const resp = await api.post<{ access_token: string }>("/auth/refresh", null);
+      if (resp && resp.access_token) {
+        await saveToken(resp.access_token);
+        scheduleTokenRefresh(resp.access_token);
+      }
+    } catch {
+      // 401 handled by caller flow; token stays cleared by AuthContext on next me() failure
+    }
+  }, delay);
+}
+
+/**
+ * Foreground handler: call from AppState 'active' events. If token expires within
+ * `windowMs` (default 10 minutes) trigger an immediate refresh.
+ */
+export async function refreshIfExpiringSoon(windowMs: number = 10 * 60 * 1000) {
+  const token = await getToken();
+  if (!token) return;
+  const expMs = decodeExpMs(token);
+  if (!expMs) return;
+  if (expMs - Date.now() < windowMs) {
+    try {
+      const resp = await api.post<{ access_token: string }>("/auth/refresh", null);
+      if (resp && resp.access_token) {
+        await saveToken(resp.access_token);
+        scheduleTokenRefresh(resp.access_token);
+      }
+    } catch {
+      /* swallow */
+    }
+  }
 }
 
 export type ApiError = { status: number; message: string };

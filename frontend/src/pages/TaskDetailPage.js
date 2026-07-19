@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, Trash2, Award, Calendar, Clock, Send, CheckCircle, XCircle, Image, FileText, Repeat } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
@@ -242,7 +243,7 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Submit modal */}
-      {submitFor && (
+      {submitFor && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ backgroundColor: "rgba(26,18,16,0.65)" }}>
           <div className="w-full max-w-[460px] rounded-2xl border p-5" style={{ backgroundColor: colors.bg.card, borderColor: colors.border.medium }} data-testid="submit-modal">
             <div className="flex items-center gap-2.5 mb-1.5">
@@ -281,11 +282,12 @@ export default function TaskDetailPage() {
               {busy ? <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <><Send size={16} />Send for Review</>}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Review modal */}
-      {reviewFor && (
+      {reviewFor && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ backgroundColor: "rgba(26,18,16,0.65)" }}>
           <div className="w-full max-w-[460px] rounded-2xl border p-5" style={{ backgroundColor: colors.bg.card, borderColor: colors.border.medium }} data-testid="review-modal">
             <div className="flex items-center gap-2.5 mb-1.5">
@@ -317,7 +319,8 @@ export default function TaskDetailPage() {
               {busy ? <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" /> : <>{decision === "approve" ? <CheckCircle size={16} /> : <XCircle size={16} />}{decision === "approve" ? "Approve" : "Reject"}</>}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </Page>
   );
