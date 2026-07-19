@@ -1,6 +1,6 @@
 import { jwtDecode } from "jwt-decode";
 
-const BACKEND = process.env.REACT_APP_BACKEND_URL;
+const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
 const TOKEN_KEY = "scindia_token";
 
 /* ---------- 401 auto-logout event bus ---------- */

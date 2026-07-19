@@ -9,6 +9,7 @@ API = f"{BASE_URL}/api"
 
 ADMIN_EMAIL = "admin@scindia.royal"
 ADMIN_PASSWORD = "Royal@2026"
+PHOTO_DATA_URI = "data:image/png;base64,iVBORw0KGgo="
 
 
 def _bearer(token):
@@ -196,7 +197,7 @@ class TestAssignmentWorkflow:
         assert r.status_code == 200, r.text
         # submit
         r = requests.post(f"{API}/tasks/{tid}/assignments/{aid}/submit",
-                         json={"photos": ["p1"], "note": "done"},
+                         json={"photos": [PHOTO_DATA_URI], "note": "done"},
                          headers=_bearer(tasker["token"]))
         assert r.status_code == 200, r.text
         assign = next(a for a in r.json()["assignments"] if a["id"] == aid)
@@ -215,7 +216,7 @@ class TestAssignmentWorkflow:
 
         # resubmit
         r = requests.post(f"{API}/tasks/{tid}/assignments/{aid}/submit",
-                         json={"photos": ["p2"], "note": "again"},
+                         json={"photos": [PHOTO_DATA_URI], "note": "again"},
                          headers=_bearer(tasker["token"]))
         assert r.status_code == 200
         assign = next(a for a in r.json()["assignments"] if a["id"] == aid)

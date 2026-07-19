@@ -4,7 +4,7 @@ Roles: admin / manager / tasker.
 Adds Projects, per-assignee task sub-completions, multi-round review with
 star ratings, activity log, and analytics.
 """
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -17,6 +17,9 @@ from typing import List, Optional, Literal, Any, Dict
 import uuid
 from datetime import datetime, timedelta, timezone
 import json
+import base64
+import binascii
+import re
 
 from passlib.context import CryptContext
 from jose import jwt, JWTError
@@ -60,6 +63,43 @@ Role = Literal["admin", "manager", "tasker"]
 Priority = Literal["low", "medium", "high", "urgent"]
 ProjectStatus = Literal["active", "closure_proposed", "closed"]
 AssignmentStatus = Literal["pending", "in_progress", "submitted", "rejected", "approved"]
+
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+MAX_ATTACHMENT_BYTES = int(os.environ.get("MAX_ATTACHMENT_BYTES", str(8 * 1024 * 1024)))
+MAX_ATTACHMENTS_PER_ROUND = int(os.environ.get("MAX_ATTACHMENTS_PER_ROUND", "10"))
+MAX_SUBMISSION_DECODED_BYTES = int(os.environ.get("MAX_SUBMISSION_DECODED_BYTES", str(8 * 1024 * 1024)))
+MAX_SUBMISSION_STORED_BYTES = int(os.environ.get("MAX_SUBMISSION_STORED_BYTES", str(12 * 1024 * 1024)))
+MAX_SUBMISSION_NOTE_CHARS = int(os.environ.get("MAX_SUBMISSION_NOTE_CHARS", "4000"))
+SAFE_ATTACHMENT_MIMES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv",
+    "text/plain",
+}
+BLOCKED_ATTACHMENT_MIMES = {
+    "application/javascript",
+    "application/xhtml+xml",
+    "image/svg+xml",
+    "text/html",
+    "text/javascript",
+}
+FILENAME_CLEANER = re.compile(r"[\x00-\x1f\x7f]")
+TRUST_PROXY_HEADERS = os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in {"1", "true", "yes", "on"}
+RATE_LIMIT_MAX_BUCKETS = int(os.environ.get("RATE_LIMIT_MAX_BUCKETS", "10000"))
+LOGIN_FAILURE_LIMIT = int(os.environ.get("LOGIN_FAILURE_LIMIT", "5"))
+LOGIN_FAILURE_WINDOW_SECONDS = int(os.environ.get("LOGIN_FAILURE_WINDOW_SECONDS", "900"))
+AI_RATE_LIMIT = int(os.environ.get("AI_RATE_LIMIT", "20"))
+AI_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
+LOGIN_FAILURES: Dict[str, List[datetime]] = {}
+AI_RATE_LIMITS: Dict[str, List[datetime]] = {}
 
 # ------------------------------------------------------------------
 # Pydantic Models
@@ -256,6 +296,78 @@ def create_access_token(user_id: str, role: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
+
+def _request_client_host(request: Request) -> str:
+    client_host = request.client.host if request.client else "unknown"
+    if not TRUST_PROXY_HEADERS:
+        return client_host
+    forwarded_for = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    return forwarded_for or client_host
+
+
+def _prune_rate_limit_store(store: Dict[str, List[datetime]], now: datetime, window_seconds: int) -> None:
+    window_start = now - timedelta(seconds=window_seconds)
+    for key in list(store.keys()):
+        recent = [seen_at for seen_at in store[key] if seen_at >= window_start]
+        if recent:
+            store[key] = recent
+        else:
+            store.pop(key, None)
+    if len(store) > RATE_LIMIT_MAX_BUCKETS:
+        overflow = len(store) - RATE_LIMIT_MAX_BUCKETS
+        for key in list(store.keys())[:overflow]:
+            store.pop(key, None)
+
+
+def _recent_rate_entries(
+    store: Dict[str, List[datetime]],
+    key: str,
+    now: datetime,
+    window_seconds: int,
+) -> List[datetime]:
+    _prune_rate_limit_store(store, now, window_seconds)
+    window_start = now - timedelta(seconds=window_seconds)
+    entries = [seen_at for seen_at in store.get(key, []) if seen_at >= window_start]
+    store[key] = entries
+    return entries
+
+
+def _login_failure_key(request: Request, email: str) -> str:
+    return f"{email.lower()}:{_request_client_host(request)}"
+
+
+def _recent_login_failures(key: str, now: datetime) -> List[datetime]:
+    return _recent_rate_entries(LOGIN_FAILURES, key, now, LOGIN_FAILURE_WINDOW_SECONDS)
+
+
+def _ensure_login_allowed(request: Request, email: str) -> str:
+    key = _login_failure_key(request, email)
+    now = datetime.now(timezone.utc)
+    if len(_recent_login_failures(key, now)) >= LOGIN_FAILURE_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+    return key
+
+
+def _record_login_failure(key: str) -> None:
+    now = datetime.now(timezone.utc)
+    failures = _recent_login_failures(key, now)
+    failures.append(now)
+    LOGIN_FAILURES[key] = failures
+
+
+def _clear_login_failures(key: str) -> None:
+    LOGIN_FAILURES.pop(key, None)
+
+
+def _ensure_ai_rate_allowed(request: Request, user: UserPublic, bucket: str) -> None:
+    key = f"{bucket}:{user.id}:{_request_client_host(request)}"
+    now = datetime.now(timezone.utc)
+    entries = _recent_rate_entries(AI_RATE_LIMITS, key, now, AI_RATE_LIMIT_WINDOW_SECONDS)
+    if len(entries) >= AI_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many AI requests. Try again later.")
+    entries.append(now)
+    AI_RATE_LIMITS[key] = entries
+
 async def _user_avg_rating(user_id: str) -> tuple[float, int]:
     """Compute avg rating across all approved assignments for a tasker."""
     pipeline = [
@@ -322,6 +434,114 @@ def require_roles(*roles: Role):
 
 require_admin = require_roles("admin")
 require_manager = require_roles("admin", "manager")
+
+
+class AttachmentValidationError(Exception):
+    pass
+
+
+def parse_cors_origins(raw: Optional[str]) -> List[str]:
+    if not raw:
+        return DEFAULT_CORS_ORIGINS
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip() and origin.strip() != "*"]
+    return origins or DEFAULT_CORS_ORIGINS
+
+
+def _safe_attachment_name(raw: str) -> str:
+    name = FILENAME_CLEANER.sub("", (raw or "attachment").strip())
+    name = name.replace("\\", "/").rsplit("/", 1)[-1]
+    return (name or "attachment")[:120]
+
+
+def _decode_data_uri(data_uri: str, fallback_mime: str) -> tuple[str, int]:
+    header, separator, payload = data_uri.partition(",")
+    if not data_uri.startswith("data:") or not separator:
+        raise AttachmentValidationError("Attachment data must be a data URI")
+    meta = [part.strip().lower() for part in header[5:].split(";") if part.strip()]
+    media_type = meta[0] if meta and meta[0] != "base64" else ""
+    mime = media_type or (fallback_mime or "application/octet-stream").lower()
+    if "base64" not in meta:
+        raise AttachmentValidationError("Attachment data must be base64 encoded")
+    try:
+        decoded = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise AttachmentValidationError("Attachment data is not valid base64") from exc
+    return mime, len(decoded)
+
+
+def _is_safe_attachment_mime(mime: str) -> bool:
+    normalized = (mime or "application/octet-stream").strip().lower()
+    if normalized in BLOCKED_ATTACHMENT_MIMES:
+        return False
+    return normalized.startswith("image/") or normalized in SAFE_ATTACHMENT_MIMES
+
+
+def _normalize_attachment(file: Attachment) -> Dict[str, Any]:
+    mime, size = _decode_data_uri(file.data_uri, file.mime)
+    if not _is_safe_attachment_mime(mime):
+        raise AttachmentValidationError(f"Unsupported attachment type: {mime}")
+    if size > MAX_ATTACHMENT_BYTES:
+        raise AttachmentValidationError("Attachment exceeds the 8 MB limit")
+    return Attachment(
+        id=(file.id or str(uuid.uuid4()))[:80],
+        name=_safe_attachment_name(file.name),
+        mime=mime,
+        size=size,
+        data_uri=file.data_uri,
+    ).model_dump()
+
+
+def _normalize_photo(data_uri: str) -> tuple[str, int]:
+    mime, size = _decode_data_uri(data_uri, "image/jpeg")
+    if not mime.startswith("image/") or mime in BLOCKED_ATTACHMENT_MIMES:
+        raise AttachmentValidationError(f"Unsupported photo type: {mime}")
+    if size > MAX_ATTACHMENT_BYTES:
+        raise AttachmentValidationError("Photo exceeds the 8 MB limit")
+    return data_uri, size
+
+
+def _stored_attachment_bytes(file: Dict[str, Any]) -> int:
+    return (
+        len(str(file.get("data_uri", "")).encode("utf-8"))
+        + len(str(file.get("name", "")).encode("utf-8"))
+        + len(str(file.get("mime", "")).encode("utf-8"))
+        + 128
+    )
+
+
+def _check_submission_budget(
+    photos: List[tuple[str, int]],
+    files: List[Dict[str, Any]],
+    note: str,
+) -> None:
+    if len(note) > MAX_SUBMISSION_NOTE_CHARS:
+        raise AttachmentValidationError(f"Submission note must be {MAX_SUBMISSION_NOTE_CHARS} characters or fewer")
+    decoded_total = sum(size for _, size in photos) + sum(int(file.get("size") or 0) for file in files)
+    if decoded_total > MAX_SUBMISSION_DECODED_BYTES:
+        raise AttachmentValidationError("Submission attachments exceed the 8 MB combined limit")
+    stored_total = (
+        len(note.encode("utf-8"))
+        + sum(len(data_uri.encode("utf-8")) for data_uri, _ in photos)
+        + sum(_stored_attachment_bytes(file) for file in files)
+    )
+    if stored_total > MAX_SUBMISSION_STORED_BYTES:
+        raise AttachmentValidationError("Submission is too large to store safely")
+
+
+def _normalize_submission_payload(body: SubmitBody) -> tuple[List[str], List[Dict[str, Any]], str]:
+    photos = body.photos or []
+    files = body.files or []
+    note = (body.note or "").strip()
+    if len(photos) + len(files) > MAX_ATTACHMENTS_PER_ROUND:
+        raise AttachmentValidationError(f"Submit at most {MAX_ATTACHMENTS_PER_ROUND} attachments")
+    normalized_photo_payloads = [_normalize_photo(photo) for photo in photos]
+    normalized_files = [_normalize_attachment(file) for file in files]
+    _check_submission_budget(normalized_photo_payloads, normalized_files, note)
+    normalized_photos = [photo for photo, _ in normalized_photo_payloads]
+    if not normalized_photos and not normalized_files and not note:
+        raise AttachmentValidationError("Add a photo, file, or note before submitting")
+    return normalized_photos, normalized_files, note
+
 
 async def log_activity(actor: UserPublic, action: str, entity_type: str,
                        entity_id: str, meta: Optional[Dict[str, Any]] = None):
@@ -446,17 +666,106 @@ async def _hydrate_project(doc: dict) -> Project:
     )
 
 def _project_manager(project: dict, user: UserPublic) -> bool:
-    return user.id in (project.get("manager_ids") or [])
+    return user.role == "manager" and user.id in (project.get("manager_ids") or [])
+
+
+def _project_creator(project: dict, user: UserPublic) -> bool:
+    return user.role == "manager" and user.id == project.get("created_by")
+
+
+def _task_creator(doc: dict, user: UserPublic) -> bool:
+    return user.role == "manager" and user.id == doc.get("created_by")
 
 def _project_visible_to(project: dict, user: UserPublic) -> bool:
     if user.role == "admin":
         return True
-    if user.id == project.get("created_by"):
+    if _project_creator(project, user):
         return True
     return (
-        user.id in (project.get("manager_ids") or [])
-        or user.id in (project.get("tasker_ids") or [])
+        _project_manager(project, user)
+        or (user.role == "tasker" and user.id in (project.get("tasker_ids") or []))
     )
+
+async def _validate_project_member_ids(manager_ids: List[str], tasker_ids: List[str]) -> None:
+    member_ids = list(dict.fromkeys([*(manager_ids or []), *(tasker_ids or [])]))
+    if not member_ids:
+        return
+    docs = await db.users.find({"id": {"$in": member_ids}}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
+    roles_by_id = {doc["id"]: doc["role"] for doc in docs}
+    missing = [uid for uid in member_ids if uid not in roles_by_id]
+    if missing:
+        raise HTTPException(400, "One or more project members were not found")
+    if any(roles_by_id[uid] != "manager" for uid in manager_ids):
+        raise HTTPException(400, "Project managers must have the manager role")
+    if any(roles_by_id[uid] != "tasker" for uid in tasker_ids):
+        raise HTTPException(400, "Project taskers must have the tasker role")
+
+
+async def _managed_project_ids(user: UserPublic) -> List[str]:
+    if user.role != "manager":
+        return []
+    return [
+        project["id"]
+        async for project in db.projects.find({"manager_ids": user.id}, {"_id": 0, "id": 1})
+    ]
+
+
+async def _task_visible_to(doc: dict, user: UserPublic) -> bool:
+    if user.role == "admin":
+        return True
+    if _task_creator(doc, user):
+        return True
+    if any(a.get("assignee_id") == user.id for a in doc.get("assignments", [])):
+        return True
+    if user.role == "manager" and doc.get("project_id"):
+        project = await db.projects.find_one({"id": doc["project_id"]}, {"_id": 0, "manager_ids": 1})
+        return bool(project and _project_manager(project, user))
+    return False
+
+
+async def _can_review_task(doc: dict, user: UserPublic) -> bool:
+    if user.role == "admin" or _task_creator(doc, user):
+        return True
+    if user.role == "manager" and doc.get("project_id"):
+        project = await db.projects.find_one({"id": doc["project_id"]}, {"_id": 0, "manager_ids": 1})
+        return bool(project and _project_manager(project, user))
+    return False
+
+
+async def _task_scope_for(user: UserPublic) -> Dict[str, Any]:
+    if user.role == "admin":
+        return {}
+    if user.role == "tasker":
+        return {"assignments.assignee_id": user.id}
+    project_ids = await _managed_project_ids(user)
+    return {
+        "$or": [
+            {"created_by": user.id},
+            {"assignments.assignee_id": user.id},
+            {"project_id": {"$in": project_ids}},
+        ],
+    }
+
+
+def _combine_query(*parts: Dict[str, Any]) -> Dict[str, Any]:
+    active = [part for part in parts if part]
+    if not active:
+        return {}
+    if len(active) == 1:
+        return active[0]
+    return {"$and": active}
+
+
+def _task_for_user(task: Task, user: UserPublic) -> Task:
+    if user.role != "tasker":
+        return task
+    assignments = [
+        assignment
+        if assignment.assignee_id == user.id
+        else assignment.model_copy(update={"rounds": [], "final_rating": None, "approved_at": None})
+        for assignment in task.assignments
+    ]
+    return task.model_copy(update={"assignments": assignments})
 
 # ------------------------------------------------------------------
 # Startup: migrate + seed
@@ -559,10 +868,14 @@ async def bootstrap():
 # Auth routes
 # ------------------------------------------------------------------
 @api.post("/auth/login", response_model=Token)
-async def login(body: LoginBody):
-    doc = await db.users.find_one({"email": body.email.lower()}, {"_id": 0})
+async def login(body: LoginBody, request: Request):
+    email = body.email.lower()
+    failure_key = _ensure_login_allowed(request, email)
+    doc = await db.users.find_one({"email": email}, {"_id": 0})
     if not doc or not verify_password(body.password, doc["hashed_password"]):
+        _record_login_failure(failure_key)
         raise HTTPException(status_code=400, detail="Incorrect email or password")
+    _clear_login_failures(failure_key)
     token = create_access_token(doc["id"], doc["role"])
     return Token(access_token=token, user=await _to_user_public(doc))
 
@@ -580,11 +893,14 @@ async def refresh_token(user: UserPublic = Depends(get_current_user)):
 # Users / Team
 # ------------------------------------------------------------------
 @api.get("/users", response_model=List[UserPublic])
-async def list_users(role: Optional[Role] = None, user: UserPublic = Depends(get_current_user)):
-    # Taskers can only list themselves? Actually allow all authenticated to see team.
+async def list_users(role: Optional[Role] = None, user: UserPublic = Depends(require_manager)):
     q = {}
     if role:
+        if role == "admin" and user.role != "admin":
+            raise HTTPException(status_code=403, detail="Only admin can list admins")
         q["role"] = role
+    elif user.role != "admin":
+        q["role"] = {"$ne": "admin"}
     docs = await db.users.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return [await _to_user_public(d) for d in docs]
 
@@ -639,6 +955,10 @@ async def user_profile(user_id: str, actor: UserPublic = Depends(get_current_use
     doc = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Not found")
+    if actor.id != user_id and actor.role == "tasker":
+        raise HTTPException(403, "Forbidden")
+    if doc.get("role") == "admin" and actor.role != "admin" and actor.id != user_id:
+        raise HTTPException(403, "Forbidden")
     # active = tasks where assignment for this user is not approved
     active = 0
     completed = 0
@@ -708,14 +1028,17 @@ async def list_projects(user: UserPublic = Depends(get_current_user)):
 
 @api.post("/projects", response_model=Project, status_code=201)
 async def create_project(body: ProjectCreate, actor: UserPublic = Depends(require_admin)):
+    manager_ids = list(dict.fromkeys(body.manager_ids or []))
+    tasker_ids = list(dict.fromkeys(body.tasker_ids or []))
+    await _validate_project_member_ids(manager_ids, tasker_ids)
     doc = {
         "id": str(uuid.uuid4()),
         "name": body.name.strip(),
         "description": (body.description or "").strip(),
         "status": "active",
         "created_by": actor.id,
-        "manager_ids": list(dict.fromkeys(body.manager_ids or [])),
-        "tasker_ids": list(dict.fromkeys(body.tasker_ids or [])),
+        "manager_ids": manager_ids,
+        "tasker_ids": tasker_ids,
         "final_rating": None,
         "final_feedback": None,
         "closure_proposed_by": None,
@@ -773,6 +1096,10 @@ async def set_project_members(project_id: str, body: ProjectMembersBody,
         updates["manager_ids"] = list(dict.fromkeys(body.manager_ids))
     if body.tasker_ids is not None:
         updates["tasker_ids"] = list(dict.fromkeys(body.tasker_ids))
+    await _validate_project_member_ids(
+        updates.get("manager_ids", doc.get("manager_ids") or []),
+        updates.get("tasker_ids", doc.get("tasker_ids") or []),
+    )
     if updates:
         await db.projects.update_one({"id": project_id}, {"$set": updates})
         await log_activity(user, "project_members_updated", "project", project_id, updates)
@@ -832,15 +1159,17 @@ async def list_tasks(
     mine: bool = False,
     user: UserPublic = Depends(get_current_user),
 ):
-    q: Dict[str, Any] = {}
+    filters: List[Dict[str, Any]] = [await _task_scope_for(user)]
     if project_id:
-        q["project_id"] = project_id
-    if user.role == "tasker" or mine:
-        q["assignments.assignee_id"] = user.id
+        filters.append({"project_id": project_id})
+    if mine or user.role == "tasker":
+        filters.append({"assignments.assignee_id": user.id})
     elif assignee_id:
-        q["assignments.assignee_id"] = assignee_id
+        filters.append({"assignments.assignee_id": assignee_id})
+    q = _combine_query(*filters)
     docs = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [await _hydrate_task(d) for d in docs]
+    tasks = [await _hydrate_task(d) for d in docs]
+    return [_task_for_user(task, user) for task in tasks]
 
 @api.post("/tasks", response_model=Task, status_code=201)
 async def create_task(body: TaskCreate, actor: UserPublic = Depends(require_manager)):
@@ -898,17 +1227,16 @@ async def create_task(body: TaskCreate, actor: UserPublic = Depends(require_mana
         "assignee_ids": body.assignee_ids,
         "project_id": body.project_id,
     })
-    return await _hydrate_task(doc)
+    return _task_for_user(await _hydrate_task(doc), actor)
 
 @api.get("/tasks/{task_id}", response_model=Task)
 async def get_task(task_id: str, user: UserPublic = Depends(get_current_user)):
     doc = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Not found")
-    if user.role == "tasker":
-        if not any(a["assignee_id"] == user.id for a in doc.get("assignments", [])):
-            raise HTTPException(403, "Forbidden")
-    return await _hydrate_task(doc)
+    if not await _task_visible_to(doc, user):
+        raise HTTPException(403, "Forbidden")
+    return _task_for_user(await _hydrate_task(doc), user)
 
 @api.patch("/tasks/{task_id}", response_model=Task)
 async def update_task(task_id: str, body: TaskUpdate,
@@ -927,7 +1255,7 @@ async def update_task(task_id: str, body: TaskUpdate,
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
         await log_activity(user, "task_updated", "task", task_id, updates)
     doc = await db.tasks.find_one({"id": task_id}, {"_id": 0})
-    return await _hydrate_task(doc)
+    return _task_for_user(await _hydrate_task(doc), user)
 
 @api.delete("/tasks/{task_id}", status_code=204)
 async def delete_task(task_id: str, actor: UserPublic = Depends(require_manager)):
@@ -967,7 +1295,7 @@ async def assignment_status(task_id: str, assignment_id: str, body: AssignmentSt
     await log_activity(user, f"assignment_{body.status}", "task", task_id,
                        {"assignment_id": assignment_id})
     doc = await db.tasks.find_one({"id": task_id}, {"_id": 0})
-    return await _hydrate_task(doc)
+    return _task_for_user(await _hydrate_task(doc), user)
 
 @api.post("/tasks/{task_id}/assignments/{assignment_id}/submit", response_model=Task)
 async def assignment_submit(task_id: str, assignment_id: str, body: SubmitBody,
@@ -982,13 +1310,17 @@ async def assignment_submit(task_id: str, assignment_id: str, body: SubmitBody,
         raise HTTPException(403, "Not your assignment")
     if a.get("status") == "approved":
         raise HTTPException(400, "Already approved")
+    try:
+        photos, files, note = _normalize_submission_payload(body)
+    except AttachmentValidationError as exc:
+        raise HTTPException(400, str(exc)) from exc
     now = datetime.now(timezone.utc)
     round_doc = {
         "id": str(uuid.uuid4()),
         "submitted_at": now,
-        "photos": body.photos or [],
-        "files": [f.model_dump() for f in (body.files or [])],
-        "note": (body.note or "").strip(),
+        "photos": photos,
+        "files": files,
+        "note": note,
         "decision": None,
         "rating": None,
         "feedback": None,
@@ -1003,7 +1335,7 @@ async def assignment_submit(task_id: str, assignment_id: str, body: SubmitBody,
     await log_activity(user, "assignment_submitted", "task", task_id,
                        {"assignment_id": assignment_id, "round_id": round_doc["id"]})
     doc = await db.tasks.find_one({"id": task_id}, {"_id": 0})
-    return await _hydrate_task(doc)
+    return _task_for_user(await _hydrate_task(doc), user)
 
 @api.post("/tasks/{task_id}/assignments/{assignment_id}/review", response_model=Task)
 async def assignment_review(task_id: str, assignment_id: str, body: ReviewBody,
@@ -1011,14 +1343,7 @@ async def assignment_review(task_id: str, assignment_id: str, body: ReviewBody,
     doc = await db.tasks.find_one({"id": task_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Not found")
-    # Admin, task creator, or a manager of the task's project can review
-    is_admin = user.role == "admin"
-    is_creator = doc.get("created_by") == user.id
-    is_project_manager = False
-    if doc.get("project_id"):
-        proj = await db.projects.find_one({"id": doc["project_id"]}, {"_id": 0, "manager_ids": 1})
-        is_project_manager = bool(proj and user.id in (proj.get("manager_ids") or []))
-    if not (is_admin or is_creator or is_project_manager):
+    if not await _can_review_task(doc, user):
         raise HTTPException(403, "Only creator, admin, or project manager can review")
     a = _find_assignment(doc, assignment_id)
     if not a:
@@ -1081,14 +1406,7 @@ class DashboardStats(BaseModel):
 
 @api.get("/stats/dashboard", response_model=DashboardStats)
 async def dashboard_stats(user: UserPublic = Depends(get_current_user)):
-    scope: Dict[str, Any] = {}
-    if user.role == "tasker":
-        scope["assignments.assignee_id"] = user.id
-    elif user.role == "manager":
-        scope["$or"] = [
-            {"created_by": user.id},
-            {"assignments.assignee_id": user.id},
-        ]
+    scope = await _task_scope_for(user)
     now = datetime.now(timezone.utc)
     total = await db.tasks.count_documents(scope)
     # completed = every assignment approved
@@ -1236,9 +1554,21 @@ async def list_logs(
     if actor_id:
         q["actor_id"] = actor_id
     if user.role == "tasker":
-        # taskers can only see logs relating to themselves (as actor or entity)
-        q = {**q, "$or": [{"actor_id": user.id}, {"entity_id": user.id}]}
-    docs = await db.activity_logs.find(q, {"_id": 0}).sort("created_at", -1).to_list(min(limit, 200))
+        q = _combine_query(q, {"$or": [{"actor_id": user.id}, {"entity_id": user.id}]})
+    elif user.role == "manager":
+        project_ids = await _managed_project_ids(user)
+        visible_tasks = await db.tasks.find(
+            await _task_scope_for(user),
+            {"_id": 0, "id": 1},
+        ).to_list(1000)
+        task_ids = [task["id"] for task in visible_tasks]
+        q = _combine_query(q, {"$or": [
+            {"actor_id": user.id},
+            {"entity_type": "project", "entity_id": {"$in": project_ids}},
+            {"entity_type": "task", "entity_id": {"$in": task_ids}},
+        ]})
+    safe_limit = min(max(limit, 1), 200)
+    docs = await db.activity_logs.find(q, {"_id": 0}).sort("created_at", -1).to_list(safe_limit)
     return [ActivityLog(**d) for d in docs]
 
 # ------------------------------------------------------------------
@@ -1281,12 +1611,13 @@ class ParsedTask(BaseModel):
     recurrence: Optional[Literal["daily", "weekly", "monthly"]] = None
 
 @api.post("/ai/task-parse", response_model=ParsedTask)
-async def ai_task_parse(body: TaskParseBody, user: UserPublic = Depends(require_manager)):
+async def ai_task_parse(body: TaskParseBody, request: Request, user: UserPublic = Depends(require_manager)):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(500, "AI is not configured")
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(400, "Please describe the task")
+    _ensure_ai_rate_allowed(request, user, "task-parse")
     now_iso = datetime.now(timezone.utc).isoformat()
     system_prompt = TASK_PARSER_SYSTEM_PROMPT.replace("{now_iso}", now_iso)
     chat = LlmChat(
@@ -1346,12 +1677,13 @@ class ChatSendResponse(BaseModel):
     reply: ChatMessage
 
 @api.post("/ai/chat/send", response_model=ChatSendResponse)
-async def ai_chat_send(body: ChatSendBody, user: UserPublic = Depends(get_current_user)):
+async def ai_chat_send(body: ChatSendBody, request: Request, user: UserPublic = Depends(get_current_user)):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(500, "AI is not configured")
     msg = (body.message or "").strip()
     if not msg:
         raise HTTPException(400, "Message is empty")
+    _ensure_ai_rate_allowed(request, user, "chat")
     session_id = body.session_id or f"concierge-{user.id}-{uuid.uuid4()}"
     history = await db.chat_messages.find(
         {"user_id": user.id, "session_id": session_id},
@@ -1410,6 +1742,15 @@ async def ai_chat_history_clear(session_id: str, user: UserPublic = Depends(get_
 async def root():
     return {"service": "Scindia Household API", "ok": True, "version": "2.1"}
 
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
+
 # ------------------------------------------------------------------
 # Review queue + Weekly digest
 # ------------------------------------------------------------------
@@ -1430,10 +1771,7 @@ async def pending_reviews(user: UserPublic = Depends(get_current_user)):
         return []
     q: Dict[str, Any] = {"assignments.status": "submitted"}
     if user.role == "manager":
-        # Managers see submissions from tasks they created OR tasks in projects they manage
-        project_ids = [
-            p["id"] async for p in db.projects.find({"manager_ids": user.id}, {"_id": 0, "id": 1})
-        ]
+        project_ids = await _managed_project_ids(user)
         q["$or"] = [
             {"created_by": user.id},
             {"project_id": {"$in": project_ids}},
@@ -1472,7 +1810,7 @@ app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=parse_cors_origins(os.environ.get("CORS_ORIGINS") or os.environ.get("FRONTEND_URL")),
     allow_methods=["*"],
     allow_headers=["*"],
 )

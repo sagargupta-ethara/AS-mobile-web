@@ -1,6 +1,7 @@
 """Iteration 10 tests: History (weekly digest removal) + file attachments on task submit."""
 import os
 import uuid
+import base64
 import pytest
 import requests
 
@@ -60,6 +61,7 @@ class TestWeeklyDigestRemoved:
 PDF_DATA_URI = (
     "data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwKL0xlbmd0aCAzIDAgUgo+PgpzdHJlYW0K"
 )
+PHOTO_DATA_URI = "data:image/png;base64,iVBORw0KGgo="
 
 
 @pytest.fixture(scope="session")
@@ -120,7 +122,7 @@ class TestSubmitWithFiles:
         assert f0["id"] == file_obj["id"]
         assert f0["name"] == "report.pdf"
         assert f0["mime"] == "application/pdf"
-        assert f0["size"] == 1024
+        assert f0["size"] == len(base64.b64decode(PDF_DATA_URI.split(",", 1)[1]))
         assert f0["data_uri"] == PDF_DATA_URI
         assert last_round["note"] == "done with file"
 
@@ -146,7 +148,7 @@ class TestSubmitWithFiles:
         aid = r.json()["assignments"][0]["id"]
 
         r = requests.post(f"{API}/tasks/{tid}/assignments/{aid}/submit",
-                          json={"photos": ["p1"], "note": "photo only"},
+                          json={"photos": [PHOTO_DATA_URI], "note": "photo only"},
                           headers=_bearer(tasker["token"]))
         assert r.status_code == 200, r.text
         assign = next(a for a in r.json()["assignments"] if a["id"] == aid)
@@ -154,7 +156,7 @@ class TestSubmitWithFiles:
         rnd = assign["rounds"][-1]
         # backward compat: files field should default to []
         assert rnd.get("files", []) == []
-        assert rnd["photos"] == ["p1"]
+        assert rnd["photos"] == [PHOTO_DATA_URI]
 
         requests.delete(f"{API}/tasks/{tid}", headers=_bearer(admin_tok))
 
