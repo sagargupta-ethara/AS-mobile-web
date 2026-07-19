@@ -61,6 +61,7 @@ The web app uses an estate-office visual language: warm ivory canvases, maroon p
 - `Spinner`: centered maroon loading indicator.
 - `EmptyState`: centered icon, title, message, and optional action.
 - `FileChip`: compact attachment row/chip with document icon, filename, size, and remove/open affordance.
+- `DataList`: spreadsheet-like operational list for task and project indexes; desktop uses column headers and aligned rows, while mobile uses compact stacked row summaries without horizontal overflow.
 
 ## 6. States
 
@@ -70,6 +71,7 @@ The web app uses an estate-office visual language: warm ivory canvases, maroon p
 - Modal overlays use dark warm scrims and centered cards with bounded width.
 - Attachment viewers must not execute arbitrary uploaded content; images and sandboxed PDFs may preview, other files use a metadata fallback.
 - Submission attachments use an 8 MB combined decoded-size limit.
+- Index rows use full-row click targets with inset focus rings, subtle ivory hover states, and stable labels on mobile.
 
 ## 7. Accessibility
 
