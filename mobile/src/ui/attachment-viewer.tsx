@@ -10,10 +10,13 @@ import {
   ActivityIndicator,
   Dimensions,
   Platform,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { colors } from "@/src/theme/colors";
 import type { Attachment } from "@/src/api/client";
 
@@ -165,6 +168,30 @@ export function AttachmentViewer({ visible, attachment, onClose }: Props) {
 
 function UnsupportedFallback({ attachment }: { attachment: Attachment }) {
   const icon = fileIconFor(attachment.mime);
+  const [busy, setBusy] = useState(false);
+
+  const shareToDevice = async () => {
+    setBusy(true);
+    try {
+      const uri = attachment.data_uri || "";
+      const comma = uri.indexOf(",");
+      if (!uri.startsWith("data:") || comma < 0) throw new Error("Invalid attachment payload");
+      const base64 = uri.slice(comma + 1);
+      const safeName = (attachment.name || "attachment").replace(/[^\w.\-() ]+/g, "_");
+      const dest = `${FileSystem.cacheDirectory}${Date.now()}_${safeName}`;
+      await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(dest, { mimeType: attachment.mime || undefined, dialogTitle: attachment.name });
+      } else {
+        Alert.alert("Saved to app cache", dest);
+      }
+    } catch (e: any) {
+      Alert.alert("Could not open file", e?.message || "Unknown error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <View style={styles.fallback}>
       <View style={[styles.fallbackIcon, { backgroundColor: `${icon.color}22` }]}>
@@ -177,9 +204,21 @@ function UnsupportedFallback({ attachment }: { attachment: Attachment }) {
         {readableSize(attachment.size)} · {attachment.mime || "unknown"}
       </Text>
       <Text style={styles.fallbackHint}>
-        Preview isn’t available for this file type. Ask the reviewer to view
-        images or PDFs directly.
+        In-app preview isn’t available for this file type. Open it in another app to view.
       </Text>
+      <TouchableOpacity
+        testID="attachment-share"
+        onPress={shareToDevice}
+        disabled={busy}
+        style={styles.shareBtn}
+      >
+        {busy ? <ActivityIndicator color={colors.text.inverse} /> : (
+          <>
+            <Ionicons name="open-outline" size={16} color={colors.text.inverse} />
+            <Text style={styles.shareBtnText}>Open with…</Text>
+          </>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -249,5 +288,21 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     marginTop: 8,
+  },
+  shareBtn: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.brand.maroon,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+  },
+  shareBtnText: {
+    color: colors.text.inverse,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.4,
   },
 });
