@@ -4,7 +4,7 @@ import { useAuth } from "@/src/auth/AuthContext";
 import { colors } from "@/src/theme/colors";
 
 export default function Index() {
-  const { isAuthed, loading } = useAuth();
+  const { isAuthed, loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,9 @@ export default function Index() {
     );
   }
 
-  return isAuthed ? <Redirect href="/(app)" /> : <Redirect href="/login" />;
+  if (!isAuthed) return <Redirect href="/login" />;
+  if (user?.must_change_password) return <Redirect href="/change-password" />;
+  return <Redirect href="/(app)" />;
 }
 
 const styles = StyleSheet.create({

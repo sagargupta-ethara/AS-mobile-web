@@ -83,7 +83,7 @@ export default function TeamMemberProfile() {
       ? "Administrator"
       : profile.user.role === "manager"
       ? "Household Manager"
-      : "Household Tasker";
+      : "Household Floor Manager";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg.primary }}>

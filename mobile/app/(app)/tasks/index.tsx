@@ -96,7 +96,7 @@ export default function TasksList() {
   };
 
   const isManager = user?.role === "admin" || user?.role === "manager";
-  const visibleFilters = user?.role === "tasker"
+  const visibleFilters = user?.role === "floor_manager"
     ? FILTERS.filter((f) => f.key !== "mine")
     : FILTERS;
 

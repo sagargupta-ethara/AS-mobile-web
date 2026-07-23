@@ -19,8 +19,8 @@ function projectProgress(project) {
 
 function teamSummary(project) {
   const managerCount = project.managers?.length || 0;
-  const taskerCount = project.taskers?.length || 0;
-  return `${managerCount} mgr · ${taskerCount} ${taskerCount === 1 ? "tasker" : "taskers"}`;
+  const taskerCount = project.floor_managers?.length || 0;
+  return `${managerCount} mgr · ${taskerCount} ${taskerCount === 1 ? "floor_manager" : "floor_managers"}`;
 }
 
 function ProjectRow({ project }) {

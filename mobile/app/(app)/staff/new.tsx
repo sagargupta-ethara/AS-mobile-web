@@ -27,14 +27,14 @@ export default function NewStaff() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("tasker");
+  const [role, setRole] = useState<Role>("floor_manager");
   const [saving, setSaving] = useState(false);
 
   const canCreateManager = user?.role === "admin";
   const ROLE_OPTIONS: { key: Role; label: string; hint: string }[] = [
     {
-      key: "tasker",
-      label: "Tasker",
+      key: "floor_manager",
+      label: "Floor Manager",
       hint: "Receives and completes tasks",
     },
     ...(canCreateManager
@@ -42,7 +42,7 @@ export default function NewStaff() {
           {
             key: "manager" as Role,
             label: "Manager",
-            hint: "Can assign tasks to taskers, manage projects",
+            hint: "Can assign tasks to floor_managers, manage projects",
           },
         ]
       : []),

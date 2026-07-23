@@ -13,12 +13,12 @@ export default function NewStaffPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("tasker");
+  const [role, setRole] = useState("floor_manager");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const canCreateManager = user?.role === "admin";
-  const ROLES = [{ key: "tasker", label: "Tasker", hint: "Receives and completes tasks" }, ...(canCreateManager ? [{ key: "manager", label: "Manager", hint: "Can assign tasks to taskers, manage projects" }] : [])];
+  const ROLES = [{ key: "floor_manager", label: "Floor Manager", hint: "Receives and completes tasks" }, ...(canCreateManager ? [{ key: "manager", label: "Manager", hint: "Can assign tasks to floor managers, manage projects" }] : [])];
 
   const submit = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) { setError("Name, email and password are required"); return; }

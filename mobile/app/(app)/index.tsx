@@ -149,22 +149,22 @@ export default function Dashboard() {
               testID="summary-projects"
             />
             <SummaryTile
-              label="Taskers"
-              value={stats?.total_taskers ?? 0}
+              label="Floor Managers"
+              value={stats?.total_floor_managers ?? 0}
               accent={colors.brand.maroon}
-              testID="summary-taskers"
+              testID="summary-floor_managers"
             />
           </View>
         ) : null}
 
-        {isManager && user?.role === "admin" && stats && stats.top_taskers.length > 0 ? (
-          <View style={styles.topTaskersCard}>
+        {isManager && user?.role === "admin" && stats && stats.top_floor_managers.length > 0 ? (
+          <View style={styles.topFloorManagersCard}>
             <Text style={styles.topLabel}>TOP PERFORMERS</Text>
-            {stats.top_taskers.slice(0, 3).map((t, idx) => (
+            {stats.top_floor_managers.slice(0, 3).map((t, idx) => (
               <TouchableOpacity
                 key={t.id}
                 onPress={() => router.push(`/(app)/team/${t.id}`)}
-                testID={`top-tasker-${t.id}`}
+                testID={`top-floor_manager-${t.id}`}
                 activeOpacity={0.85}
                 style={styles.topRow}
               >
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.5,
   },
-  topTaskersCard: {
+  topFloorManagersCard: {
     backgroundColor: colors.bg.secondary,
     borderRadius: 14,
     padding: 14,

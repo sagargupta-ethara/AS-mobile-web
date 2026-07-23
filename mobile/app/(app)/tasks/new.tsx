@@ -103,13 +103,8 @@ export default function NewTask() {
     load();
   }, [load]);
 
-  // Managers can only assign to taskers; admins to managers OR taskers
-  const eligibleAssignees = useMemo(() => {
-    if (user?.role === "admin") {
-      return users.filter((u) => u.role === "manager" || u.role === "tasker");
-    }
-    return users.filter((u) => u.role === "tasker");
-  }, [users, user]);
+  // Cross-role assignments allowed: any active user can be assigned
+  const eligibleAssignees = useMemo(() => users, [users]);
 
   const canSubmit = title.trim().length > 0 && assigneeIds.length > 0;
 
@@ -126,17 +121,28 @@ export default function NewTask() {
     }
     setSaving(true);
     try {
-      await api.post("/tasks", {
+      const payload: any = {
         title: title.trim(),
         description: description.trim(),
-        category,
         project_id: projectId,
         assignee_ids: assigneeIds,
         priority,
         due_date: dueDate ? dueDate.toISOString() : null,
-        is_recurring: isRecurring,
-        recurrence: isRecurring ? recurrence : null,
-      });
+      };
+      if (isRecurring) {
+        const unit = recurrence === "daily" ? "day" : recurrence === "weekly" ? "week" : "month";
+        const startISO = (dueDate || new Date()).toISOString().slice(0, 10);
+        payload.recurrence = {
+          enabled: true,
+          interval_value: 1,
+          interval_unit: unit,
+          weekdays: [],
+          day_of_month: null,
+          start_date: startISO,
+          end_date: null,
+        };
+      }
+      await api.post("/tasks", payload);
       toast.show(
         assigneeIds.length > 1
           ? `Task assigned to ${assigneeIds.length} members`
@@ -277,7 +283,7 @@ export default function NewTask() {
 
           <Field
             label={`Assign to (${assigneeIds.length})${
-              isManager ? " · taskers only" : ""
+              isManager ? " · floor_managers only" : ""
             }`}
           >
             <ScrollView
@@ -344,49 +350,6 @@ export default function NewTask() {
                   );
                 })
               )}
-            </ScrollView>
-          </Field>
-
-          <Field label="Category">
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipsRow}
-            >
-              <TouchableOpacity
-                testID="category-none"
-                onPress={() => setCategory(null)}
-                style={[styles.chip, category === null && styles.chipActive]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    category === null && styles.chipTextActive,
-                  ]}
-                >
-                  None
-                </Text>
-              </TouchableOpacity>
-              {categories.map((c) => {
-                const active = category === c.name;
-                return (
-                  <TouchableOpacity
-                    key={c.id}
-                    testID={`category-${c.id}`}
-                    onPress={() => setCategory(c.name)}
-                    style={[styles.chip, active && styles.chipActive]}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        active && styles.chipTextActive,
-                      ]}
-                    >
-                      {c.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
             </ScrollView>
           </Field>
 

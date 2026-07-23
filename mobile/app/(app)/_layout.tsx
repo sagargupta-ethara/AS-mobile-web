@@ -1,5 +1,5 @@
 import React from "react";
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,6 +13,10 @@ export default function AppLayout() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const isManager = user?.role === "admin" || user?.role === "manager";
+
+  if (user?.must_change_password) {
+    return <Redirect href="/change-password" />;
+  }
 
   return (
     <Tabs

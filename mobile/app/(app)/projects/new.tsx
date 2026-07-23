@@ -34,7 +34,7 @@ export default function NewProject() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [managerIds, setManagerIds] = useState<string[]>([]);
-  const [taskerIds, setTaskerIds] = useState<string[]>([]);
+  const [floorManagerIds, setFloorManagerIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,8 +50,8 @@ export default function NewProject() {
     })();
   }, []);
 
-  const managers = users.filter((u) => u.role === "manager");
-  const taskers = users.filter((u) => u.role === "tasker");
+  const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+  const floor_managers = users.filter((u) => u.role === "floor_manager");
 
   const toggle = (arr: string[], id: string, setter: (v: string[]) => void) => {
     setter(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
@@ -68,7 +68,7 @@ export default function NewProject() {
         name: name.trim(),
         description: description.trim(),
         manager_ids: managerIds,
-        tasker_ids: taskerIds,
+        floor_manager_ids: floorManagerIds,
       });
       toast.show("Project created", "success");
       router.back();
@@ -185,22 +185,22 @@ export default function NewProject() {
               )}
             </ScrollView>
           </Field>
-          <Field label={`Taskers (${taskerIds.length})`}>
+          <Field label={`Floor Managers (${floorManagerIds.length})`}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chipsRow}
             >
-              {taskers.length === 0 ? (
-                <Text style={styles.muted}>Add taskers from Team first.</Text>
+              {floor_managers.length === 0 ? (
+                <Text style={styles.muted}>Add floor_managers from Team first.</Text>
               ) : (
-                taskers.map((t) => {
-                  const active = taskerIds.includes(t.id);
+                floor_managers.map((t) => {
+                  const active = floorManagerIds.includes(t.id);
                   return (
                     <TouchableOpacity
                       key={t.id}
-                      testID={`select-tasker-${t.id}`}
-                      onPress={() => toggle(taskerIds, t.id, setTaskerIds)}
+                      testID={`select-floor_manager-${t.id}`}
+                      onPress={() => toggle(floorManagerIds, t.id, setFloorManagerIds)}
                       activeOpacity={0.85}
                       style={[
                         styles.personChip,

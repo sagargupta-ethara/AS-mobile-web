@@ -88,7 +88,7 @@ export default function DashboardPage() {
         { label: "Completed", value: stats?.completed_tasks ?? 0, icon: <CheckCircle2 size={17} />, accent: colors.brand.emerald, testId: "summary-completed" },
         { label: "Total Tasks", value: stats?.total_tasks ?? 0, icon: <ClipboardList size={17} />, accent: colors.brand.maroon, testId: "summary-total-tasks" },
         { label: "Active Projects", value: stats?.active_projects ?? 0, icon: <Library size={17} />, accent: colors.brand.gold, testId: "summary-projects" },
-        { label: "Taskers", value: stats?.total_taskers ?? 0, icon: <Users size={17} />, accent: colors.brand.navy, testId: "summary-taskers" },
+        { label: "Floor Managers", value: stats?.total_floor_managers ?? 0, icon: <Users size={17} />, accent: colors.brand.navy, testId: "summary-floor_managers" },
         { label: "Managers", value: stats?.total_managers ?? 0, icon: <Users size={17} />, accent: colors.brand.emerald, testId: "summary-managers" },
       ]
     : [
@@ -250,13 +250,13 @@ export default function DashboardPage() {
 
         {/* Side rail */}
         <div className="flex flex-col gap-4 md:gap-5">
-          {user?.role === "admin" && stats?.top_taskers?.length > 0 && (
+          {user?.role === "admin" && stats?.top_floor_managers?.length > 0 && (
             <SectionCard title="Top Performers" testId="top-performers">
               <div className="flex flex-col gap-1">
-                {stats.top_taskers.slice(0, 5).map((t, idx) => (
+                {stats.top_floor_managers.slice(0, 5).map((t, idx) => (
                   <button
                     key={t.id}
-                    data-testid={`top-tasker-${t.id}`}
+                    data-testid={`top-floor_manager-${t.id}`}
                     onClick={() => navigate(`/team/${t.id}`)}
                     className="flex items-center gap-3 py-2 px-1.5 -mx-1.5 rounded-xl text-left transition-colors hover:bg-[rgba(212,175,55,0.08)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
                   >

@@ -190,7 +190,7 @@ export default function TasksPage() {
   }, [load]);
 
   const isManager = user?.role === "admin" || user?.role === "manager";
-  const visibleFilters = user?.role === "tasker" ? FILTERS.filter((filterItem) => filterItem.key !== "mine") : FILTERS;
+  const visibleFilters = user?.role === "floor_manager" ? FILTERS.filter((filterItem) => filterItem.key !== "mine") : FILTERS;
 
   const filtered = useMemo(() => {
     let list = tasks;

@@ -9,7 +9,7 @@ import { Page, PageHeader, Card, Button, Spinner, EmptyState, FilterChips, Avata
 const FILTERS = [
   { key: "all", label: "All" },
   { key: "manager", label: "Managers" },
-  { key: "tasker", label: "Taskers" },
+  { key: "floor_manager", label: "Floor Managers" },
 ];
 
 export default function StaffPage() {

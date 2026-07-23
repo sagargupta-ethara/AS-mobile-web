@@ -44,7 +44,7 @@ export default function ProjectDetailPage() {
     try {
       const body = {};
       if (addRole === "manager") body.manager_ids = [...project.managers.map((m) => m.id), userId];
-      else body.tasker_ids = [...project.taskers.map((t) => t.id), userId];
+      else body.floor_manager_ids = [...project.floor_managers.map((t) => t.id), userId];
       await api.put(`/projects/${project.id}/members`, body);
       setAddRole(null); await load();
     } catch { /* silent */ } finally { setSavingMembers(false); }
@@ -117,7 +117,7 @@ export default function ProjectDetailPage() {
             <StatTile label="Avg Rating" value={stats.avg_task_rating > 0 ? stats.avg_task_rating.toFixed(1) : "—"} icon={<Star size={16} />} accent={colors.brand.gold} />
             <StatTile label="In Review" value={stats.tasks_by_status.in_review || 0} icon={<Hourglass size={16} />} accent="#D4770A" />
             <StatTile label="Managers" value={project.managers.length} icon={<Users size={16} />} accent={colors.brand.navy} />
-            <StatTile label="Taskers" value={project.taskers.length} icon={<Users size={16} />} accent={colors.brand.maroon} />
+            <StatTile label="Floor Managers" value={project.floor_managers.length} icon={<Users size={16} />} accent={colors.brand.maroon} />
           </div>
         )}
       </Card>
@@ -161,24 +161,24 @@ export default function ProjectDetailPage() {
           </SectionCard>
 
           <SectionCard
-            title="Taskers"
+            title="Floor Managers"
             action={(isAdmin || isProjectMgr) && project.status !== "closed" && (
-              <Button testId="add-tasker-btn" variant="secondary" icon={<Plus size={16} />} onClick={() => setAddRole("tasker")}>Add</Button>
+              <Button testId="add-floor_manager-btn" variant="secondary" icon={<Plus size={16} />} onClick={() => setAddRole("floor_manager")}>Add</Button>
             )}
           >
             <div className="flex flex-wrap gap-2">
-              {project.taskers.length === 0 ? (
-                <p className="text-[13px]" style={{ color: colors.text.muted }}>No taskers assigned</p>
+              {project.floor_managers.length === 0 ? (
+                <p className="text-[13px]" style={{ color: colors.text.muted }}>No floor_managers assigned</p>
               ) : (
-                project.taskers.map((t) => <MemberChip key={t.id} member={t} role="tasker" onClick={() => navigate(`/team/${t.id}`)} />)
+                project.floor_managers.map((t) => <MemberChip key={t.id} member={t} role="floor_manager" onClick={() => navigate(`/team/${t.id}`)} />)
               )}
             </div>
           </SectionCard>
 
-          {stats && stats.tasker_leaderboard?.length > 0 && (
+          {stats && stats.floor_manager_leaderboard?.length > 0 && (
             <SectionCard title="Top Performers">
               <div className="flex flex-col gap-2">
-                {stats.tasker_leaderboard.map((row, idx) => (
+                {stats.floor_manager_leaderboard.map((row, idx) => (
                   <div
                     key={row.id}
                     data-testid={`leaderboard-${row.id}`}
@@ -275,12 +275,12 @@ export default function ProjectDetailPage() {
           <div className="w-full max-w-[460px] rounded-2xl border p-5 max-h-[80vh] overflow-y-auto" style={{ backgroundColor: colors.bg.card, borderColor: colors.border.medium }} data-testid="add-member-modal">
             <div className="flex items-center gap-2.5 mb-1.5">
               <div className="w-8 h-8 rounded-full border flex items-center justify-center" style={{ borderColor: colors.brand.gold, backgroundColor: "rgba(212,175,55,0.15)" }}><Users size={15} style={{ color: colors.brand.gold }} /></div>
-              <h3 className="flex-1 font-display text-[17px] font-bold" style={{ color: colors.brand.maroon }}>Add {addRole === "manager" ? "Manager" : "Tasker"}</h3>
+              <h3 className="flex-1 font-display text-[17px] font-bold" style={{ color: colors.brand.maroon }}>Add {addRole === "manager" ? "Manager" : "Floor Manager"}</h3>
               <button data-testid="add-member-close" onClick={() => setAddRole(null)} className="focus:outline-none" style={{ color: colors.text.muted }}>✕</button>
             </div>
             <p className="text-[12.5px] mb-3" style={{ color: colors.text.secondary }}>Pick a household member to add to this project.</p>
             {(() => {
-              const existingIds = addRole === "manager" ? project.managers.map((m) => m.id) : project.taskers.map((t) => t.id);
+              const existingIds = addRole === "manager" ? project.managers.map((m) => m.id) : project.floor_managers.map((t) => t.id);
               const eligible = allUsers.filter((u) => u.role === addRole && !existingIds.includes(u.id));
               if (eligible.length === 0) return <p className="text-center py-6 text-xs" style={{ color: colors.text.muted }}>No available {addRole}s.</p>;
               return eligible.map((u) => (

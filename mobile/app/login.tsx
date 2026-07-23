@@ -19,41 +19,39 @@ import { useAuth } from "@/src/auth/AuthContext";
 import { useToast } from "@/src/ui/toast";
 import { colors, AUTH_BG } from "@/src/theme/colors";
 
-const QUICK_ACCOUNTS: {
-  key: string;
-  label: string;
-  hint: string;
+const QUICK_ACCOUNT_GROUPS: {
+  heading: string;
   role: string;
-  email: string;
-  password: string;
   color: string;
+  accounts: { key: string; label: string; hint: string; email: string; password: string }[];
 }[] = [
   {
-    key: "admin",
-    label: "Maharaja",
-    hint: "Administrator",
-    role: "ADMIN",
-    email: "admin" + String.fromCharCode(64) + "scindia.royal",
-    password: "Royal" + String.fromCharCode(64) + "2026",
-    color: "#7B181E",
+    heading: "Admin", role: "ADMIN", color: "#7B181E",
+    accounts: [
+      { key: "admin", label: "Maharaja Scindia", hint: "Administrator",
+        email: "admin" + String.fromCharCode(64) + "scindia.royal",
+        password: "password123" },
+    ],
   },
   {
-    key: "manager",
-    label: "Manager Rao",
-    hint: "Household Manager",
-    role: "MANAGER",
-    email: "manager" + String.fromCharCode(64) + "scindia.royal",
-    password: "test1234",
-    color: "#000080",
+    heading: "Managers", role: "MANAGER", color: "#000080",
+    accounts: [
+      { key: "her-highness",   label: "Her Highness",   hint: "Manager", email: "her-highness"   + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "mayank",         label: "Mayank",         hint: "Manager", email: "mayank"         + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "yuvraj-maharaj", label: "Yuvraj Maharaj", hint: "Manager", email: "yuvraj-maharaj" + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+    ],
   },
   {
-    key: "tasker",
-    label: "Tasker Krishna",
-    hint: "Household Tasker",
-    role: "TASKER",
-    email: "tasker" + String.fromCharCode(64) + "scindia.royal",
-    password: "test1234",
-    color: "#097969",
+    heading: "Floor Managers", role: "FLOOR", color: "#097969",
+    accounts: [
+      { key: "tanya",    label: "Tanya",    hint: "Floor Manager", email: "tanya"    + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "desh",     label: "Desh",     hint: "Floor Manager", email: "desh"     + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "priyanka", label: "Priyanka", hint: "Floor Manager", email: "priyanka" + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "satish",   label: "Satish",   hint: "Floor Manager", email: "satish"   + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "brajhari", label: "Brajhari", hint: "Floor Manager", email: "brajhari" + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "rajinder", label: "Rajinder", hint: "Floor Manager", email: "rajinder" + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+      { key: "bhushan",  label: "Bhushan",  hint: "Floor Manager", email: "bhushan"  + String.fromCharCode(64) + "scindia.royal", password: "password123" },
+    ],
   },
 ];
 
@@ -86,7 +84,7 @@ export default function LoginScreen() {
     try {
       const u = await login(em, pw);
       toast.show(label ? `${label} — welcome!` : `Welcome, ${u.name}`, "success");
-      router.replace("/(app)");
+      router.replace(u.must_change_password ? "/change-password" : "/(app)");
     } catch (e: any) {
       toast.show(e?.message || "Login failed", "error");
     } finally {
@@ -276,30 +274,31 @@ export default function LoginScreen() {
               <View style={styles.divider} />
             </View>
 
-            {QUICK_ACCOUNTS.map((q) => (
-              <TouchableOpacity
-                key={q.key}
-                testID={`quick-login-${q.key}`}
-                style={styles.quickBtn}
-                onPress={() => onQuickLogin(q.email, q.password, q.label)}
-                disabled={loading}
-                activeOpacity={0.85}
-              >
-                <View style={[styles.quickIcon, { backgroundColor: q.color }]}>
-                  <Ionicons name="ribbon" size={13} color={colors.brand.gold} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.quickTitle}>{q.label}</Text>
-                  <Text style={styles.quickSubtitle}>{q.hint}</Text>
-                </View>
-                <View
-                  style={[styles.quickRolePill, { borderColor: q.color }]}
-                >
-                  <Text style={[styles.quickRoleText, { color: q.color }]}>
-                    {q.role}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+            {QUICK_ACCOUNT_GROUPS.map((group) => (
+              <View key={group.heading} testID={`quick-group-${group.heading.toLowerCase().replace(/\s+/g,'-')}`}>
+                <Text style={[styles.hintText, { color: group.color, marginTop: 6, marginBottom: 4 }]}>{group.heading}</Text>
+                {group.accounts.map((q) => (
+                  <TouchableOpacity
+                    key={q.key}
+                    testID={`quick-login-${q.key}`}
+                    style={styles.quickBtn}
+                    onPress={() => onQuickLogin(q.email, q.password, q.label)}
+                    disabled={loading}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.quickIcon, { backgroundColor: group.color }]}>
+                      <Ionicons name="ribbon" size={13} color={colors.brand.gold} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.quickTitle}>{q.label}</Text>
+                      <Text style={styles.quickSubtitle}>{q.hint}</Text>
+                    </View>
+                    <View style={[styles.quickRolePill, { borderColor: group.color }]}>
+                      <Text style={[styles.quickRoleText, { color: group.color }]}>{group.role}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ))}
           </View>
 

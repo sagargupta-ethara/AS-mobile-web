@@ -26,7 +26,7 @@ export default function TeamMemberPage() {
   if (loading) return <Page testId="team-member-page"><Spinner /></Page>;
   if (!profile) return <Page testId="team-member-page"><p style={{ color: colors.text.secondary }}>Profile not found.</p></Page>;
 
-  const roleLabel = profile.user.role === "admin" ? "Administrator" : profile.user.role === "manager" ? "Household Manager" : "Household Tasker";
+  const roleLabel = profile.user.role === "admin" ? "Administrator" : profile.user.role === "manager" ? "Household Manager" : "Household Floor Manager";
 
   return (
     <Page testId="team-member-page">

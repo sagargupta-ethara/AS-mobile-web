@@ -48,7 +48,7 @@ export default function ProjectDetail() {
   const [feedback, setFeedback] = useState("");
 
   // Add-member modal state
-  const [addRole, setAddRole] = useState<"manager" | "tasker" | null>(null);
+  const [addRole, setAddRole] = useState<"manager" | "floor_manager" | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [savingMembers, setSavingMembers] = useState(false);
 
@@ -87,7 +87,7 @@ export default function ProjectDetail() {
       if (addRole === "manager") {
         body.manager_ids = [...project.managers.map((m) => m.id), userId];
       } else {
-        body.tasker_ids = [...project.taskers.map((t) => t.id), userId];
+        body.floor_manager_ids = [...project.floor_managers.map((t) => t.id), userId];
       }
       await api.put<Project>(`/projects/${project.id}/members`, body);
       toast.show(`Member added`, "success");
@@ -255,8 +255,8 @@ export default function ProjectDetail() {
                 accent={colors.brand.navy}
               />
               <StatTile
-                label="Taskers"
-                value={String(project.taskers.length)}
+                label="Floor Managers"
+                value={String(project.floor_managers.length)}
                 icon="people"
                 accent={colors.brand.maroon}
               />
@@ -303,11 +303,11 @@ export default function ProjectDetail() {
           </View>
 
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Taskers</Text>
+            <Text style={styles.sectionTitle}>Floor Managers</Text>
             {(isAdmin || isProjectMgr) && project.status !== "closed" ? (
               <TouchableOpacity
-                testID="add-tasker-btn"
-                onPress={() => setAddRole("tasker")}
+                testID="add-floor_manager-btn"
+                onPress={() => setAddRole("floor_manager")}
                 activeOpacity={0.85}
                 style={styles.smallBtn}
               >
@@ -317,10 +317,10 @@ export default function ProjectDetail() {
             ) : null}
           </View>
           <View style={styles.membersRow}>
-            {project.taskers.length === 0 ? (
-              <Text style={styles.muted}>No taskers assigned</Text>
+            {project.floor_managers.length === 0 ? (
+              <Text style={styles.muted}>No floor_managers assigned</Text>
             ) : (
-              project.taskers.map((t) => (
+              project.floor_managers.map((t) => (
                 <TouchableOpacity
                   key={t.id}
                   onPress={() => router.push(`/(app)/team/${t.id}`)}
@@ -374,10 +374,10 @@ export default function ProjectDetail() {
           )}
 
           {/* Leaderboard */}
-          {stats && stats.tasker_leaderboard.length > 0 ? (
+          {stats && stats.floor_manager_leaderboard.length > 0 ? (
             <>
               <SectionHeader label="Top Performers" />
-              {stats.tasker_leaderboard.map((row, idx) => (
+              {stats.floor_manager_leaderboard.map((row, idx) => (
                 <View
                   key={row.id}
                   style={styles.lbRow}
@@ -532,7 +532,7 @@ export default function ProjectDetail() {
                 <Ionicons name="person-add" size={15} color={colors.brand.gold} />
               </View>
               <Text style={styles.modalTitle}>
-                Add {addRole === "manager" ? "Manager" : "Tasker"}
+                Add {addRole === "manager" ? "Manager" : "Floor Manager"}
               </Text>
               <TouchableOpacity
                 testID="add-member-close"
@@ -551,7 +551,7 @@ export default function ProjectDetail() {
                 const existingIds =
                   addRole === "manager"
                     ? project.managers.map((m) => m.id)
-                    : project.taskers.map((t) => t.id);
+                    : project.floor_managers.map((t) => t.id);
                 const eligible = allUsers.filter(
                   (u) => u.role === addRole && !existingIds.includes(u.id)
                 );

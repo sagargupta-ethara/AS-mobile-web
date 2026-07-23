@@ -18,12 +18,12 @@ import { useAuth } from "@/src/auth/AuthContext";
 import { useToast } from "@/src/ui/toast";
 import { colors } from "@/src/theme/colors";
 
-type RoleFilter = "all" | "tasker" | "manager";
+type RoleFilter = "all" | "floor_manager" | "manager";
 
 const FILTERS: { key: RoleFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "manager", label: "Managers" },
-  { key: "tasker", label: "Taskers" },
+  { key: "floor_manager", label: "Floor Managers" },
 ];
 
 export default function StaffList() {
@@ -183,7 +183,7 @@ export default function StaffList() {
                   ) : null}
                 </View>
               </View>
-              {canRemove || (user?.role === "manager" && item.role === "tasker") ? (
+              {canRemove || (user?.role === "manager" && item.role === "floor_manager") ? (
                 <TouchableOpacity
                   testID={`staff-remove-${item.id}`}
                   onPress={(e) => {

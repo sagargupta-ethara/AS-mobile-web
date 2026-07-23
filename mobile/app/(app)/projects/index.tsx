@@ -196,7 +196,7 @@ function ProjectRow({
           <View style={styles.metaItem}>
             <Ionicons name="people" size={13} color={colors.brand.gold} />
             <Text style={styles.metaText}>
-              {project.managers.length} mgr · {project.taskers.length} tsk
+              {project.managers.length} mgr · {project.floor_managers.length} tsk
             </Text>
           </View>
           <View style={styles.metaItem}>

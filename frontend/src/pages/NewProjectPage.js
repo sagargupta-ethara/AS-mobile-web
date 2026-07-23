@@ -12,21 +12,21 @@ export default function NewProjectPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [managerIds, setManagerIds] = useState([]);
-  const [taskerIds, setTaskerIds] = useState([]);
+  const [floorManagerIds, setFloorManagerIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { (async () => { try { setUsers(await api.get("/users")); } finally { setLoading(false); } })(); }, []);
 
-  const managers = users.filter((u) => u.role === "manager");
-  const taskers = users.filter((u) => u.role === "tasker");
+  const managers = users.filter((u) => u.role === "manager" || u.role === "admin");
+  const floor_managers = users.filter((u) => u.role === "floor_manager");
   const toggle = (arr, id, setter) => setter(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
 
   const submit = async () => {
     if (!name.trim()) return;
     setSaving(true);
-    try { await api.post("/projects", { name: name.trim(), description: description.trim(), manager_ids: managerIds, tasker_ids: taskerIds }); navigate(-1); } catch { /* silent */ } finally { setSaving(false); }
+    try { await api.post("/projects", { name: name.trim(), description: description.trim(), manager_ids: managerIds, floor_manager_ids: floorManagerIds }); navigate(-1); } catch { /* silent */ } finally { setSaving(false); }
   };
 
   if (loading) return <Spinner />;
@@ -58,12 +58,12 @@ export default function NewProjectPage() {
               })}
             </div>
           </Field>
-          <Field label={`Taskers (${taskerIds.length})`}>
+          <Field label={`Floor Managers (${floorManagerIds.length})`}>
             <div className="flex gap-2 overflow-x-auto py-1">
-              {taskers.length === 0 ? <p className="text-[13px] py-2" style={{ color: colors.text.muted }}>Add taskers from Team first.</p> : taskers.map((t) => {
-                const active = taskerIds.includes(t.id);
+              {floor_managers.length === 0 ? <p className="text-[13px] py-2" style={{ color: colors.text.muted }}>Add floor managers from Team first.</p> : floor_managers.map((t) => {
+                const active = floorManagerIds.includes(t.id);
                 return (
-                  <button key={t.id} data-testid={`select-tasker-${t.id}`} onClick={() => toggle(taskerIds, t.id, setTaskerIds)} className="shrink-0 inline-flex items-center gap-2 px-2.5 py-2 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ backgroundColor: active ? colors.brand.maroon : colors.bg.card, borderColor: active ? colors.brand.maroon : colors.border.medium }}>
+                  <button key={t.id} data-testid={`select-floor_manager-${t.id}`} onClick={() => toggle(floorManagerIds, t.id, setFloorManagerIds)} className="shrink-0 inline-flex items-center gap-2 px-2.5 py-2 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-[#D4AF37]" style={{ backgroundColor: active ? colors.brand.maroon : colors.bg.card, borderColor: active ? colors.brand.maroon : colors.border.medium }}>
                     <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ backgroundColor: active ? colors.brand.gold : colors.brand.maroon, color: active ? colors.brand.maroon : colors.text.inverse }}>{initials(t.name)}</div>
                     <span className="text-[12.5px] font-bold" style={{ color: active ? colors.text.inverse : colors.text.primary }}>{t.name}</span>
                   </button>

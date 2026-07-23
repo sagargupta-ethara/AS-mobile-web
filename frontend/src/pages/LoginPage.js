@@ -4,10 +4,39 @@ import { Mail, Lock, Eye, EyeOff, ArrowRight, Award } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { colors, AUTH_BG } from "@/theme/colors";
 
-const QUICK_ACCOUNTS = [
-  { key: "admin", label: "Maharaja", hint: "Administrator", role: "ADMIN", email: "admin@scindia.royal", password: "Royal@2026", color: "#7B181E" },
-  { key: "manager", label: "Manager Rao", hint: "Household Manager", role: "MANAGER", email: "manager@scindia.royal", password: "test1234", color: "#000080" },
-  { key: "tasker", label: "Tasker Krishna", hint: "Household Tasker", role: "TASKER", email: "tasker@scindia.royal", password: "test1234", color: "#097969" },
+const QUICK_ACCOUNT_GROUPS = [
+  {
+    heading: "Admin",
+    color: "#7B181E",
+    role: "ADMIN",
+    accounts: [
+      { key: "admin", label: "Maharaja Scindia", hint: "Administrator", email: "admin@scindia.royal", password: "password123" },
+    ],
+  },
+  {
+    heading: "Managers",
+    color: "#000080",
+    role: "MANAGER",
+    accounts: [
+      { key: "her-highness",   label: "Her Highness",   hint: "Manager", email: "her-highness@scindia.royal",   password: "password123" },
+      { key: "mayank",         label: "Mayank",         hint: "Manager", email: "mayank@scindia.royal",         password: "password123" },
+      { key: "yuvraj-maharaj", label: "Yuvraj Maharaj", hint: "Manager", email: "yuvraj-maharaj@scindia.royal", password: "password123" },
+    ],
+  },
+  {
+    heading: "Floor Managers",
+    color: "#097969",
+    role: "FLOOR",
+    accounts: [
+      { key: "tanya",    label: "Tanya",    hint: "Floor Manager", email: "tanya@scindia.royal",    password: "password123" },
+      { key: "desh",     label: "Desh",     hint: "Floor Manager", email: "desh@scindia.royal",     password: "password123" },
+      { key: "priyanka", label: "Priyanka", hint: "Floor Manager", email: "priyanka@scindia.royal", password: "password123" },
+      { key: "satish",   label: "Satish",   hint: "Floor Manager", email: "satish@scindia.royal",   password: "password123" },
+      { key: "brajhari", label: "Brajhari", hint: "Floor Manager", email: "brajhari@scindia.royal", password: "password123" },
+      { key: "rajinder", label: "Rajinder", hint: "Floor Manager", email: "rajinder@scindia.royal", password: "password123" },
+      { key: "bhushan",  label: "Bhushan",  hint: "Floor Manager", email: "bhushan@scindia.royal",  password: "password123" },
+    ],
+  },
 ];
 
 export default function LoginPage() {
@@ -118,24 +147,29 @@ export default function LoginPage() {
             <div className="flex-1 h-px" style={{ backgroundColor: colors.border.subtle }} />
           </div>
 
-          {QUICK_ACCOUNTS.map((q) => (
-            <button
-              key={q.key}
-              data-testid={`quick-login-${q.key}`}
-              onClick={() => doLogin(q.email, q.password, q.label)}
-              disabled={loading}
-              className="w-full flex items-center gap-3 rounded-xl border py-2.5 px-3 mb-2 transition-colors hover:bg-[rgba(212,175,55,0.12)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
-              style={{ borderColor: colors.brand.gold, backgroundColor: "rgba(212,175,55,0.08)" }}
-            >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: q.color }}>
-                <Award size={13} style={{ color: colors.brand.gold }} />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-[13.5px] font-bold" style={{ color: colors.brand.maroon }}>{q.label}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: colors.text.muted }}>{q.hint}</p>
-              </div>
-              <span className="rounded-full border px-2 py-0.5 text-[9px] font-extrabold tracking-[1px]" style={{ borderColor: q.color, color: q.color }}>{q.role}</span>
-            </button>
+          {QUICK_ACCOUNT_GROUPS.map((group) => (
+            <div key={group.heading} className="mb-3" data-testid={`quick-group-${group.heading.toLowerCase().replace(/\s+/g,'-')}`}>
+              <p className="text-[10px] tracking-[1.5px] uppercase font-bold mb-1.5" style={{ color: group.color }}>{group.heading}</p>
+              {group.accounts.map((q) => (
+                <button
+                  key={q.key}
+                  data-testid={`quick-login-${q.key}`}
+                  onClick={() => doLogin(q.email, q.password, q.label)}
+                  disabled={loading}
+                  className="w-full flex items-center gap-3 rounded-xl border py-2 px-3 mb-1.5 transition-colors hover:bg-[rgba(212,175,55,0.12)] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                  style={{ borderColor: colors.brand.gold, backgroundColor: "rgba(212,175,55,0.08)" }}
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: group.color }}>
+                    <Award size={12} style={{ color: colors.brand.gold }} />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-[13px] font-bold" style={{ color: colors.brand.maroon }}>{q.label}</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: colors.text.muted }}>{q.hint}</p>
+                  </div>
+                  <span className="rounded-full border px-2 py-0.5 text-[9px] font-extrabold tracking-[1px]" style={{ borderColor: group.color, color: group.color }}>{group.role}</span>
+                </button>
+              ))}
+            </div>
           ))}
         </div>
 

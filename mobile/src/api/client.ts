@@ -128,7 +128,7 @@ export const api = {
 };
 
 // ------ Types ------
-export type Role = "admin" | "manager" | "tasker";
+export type Role = "admin" | "manager" | "floor_manager";
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type ProjectStatus = "active" | "closure_proposed" | "closed";
 export type AssignmentStatus =
@@ -152,6 +152,7 @@ export interface User {
   avatar?: string | null;
   avg_rating: number;
   ratings_count: number;
+  must_change_password?: boolean;
   created_at: string;
 }
 
@@ -229,7 +230,7 @@ export interface Project {
   created_by: string;
   created_by_name?: string | null;
   managers: UserRef[];
-  taskers: UserRef[];
+  floor_managers: UserRef[];
   task_count: number;
   completed_task_count: number;
   final_rating?: number | null;
@@ -248,9 +249,9 @@ export interface DashboardStats {
   overdue: number;
   total_projects: number;
   active_projects: number;
-  total_taskers: number;
+  total_floor_managers: number;
   total_managers: number;
-  top_taskers: {
+  top_floor_managers: {
     id: string;
     name: string;
     role: Role;
@@ -264,7 +265,7 @@ export interface ProjectStats {
   tasks_by_status: Record<OverallStatus, number>;
   tasks_by_priority: Record<Priority, number>;
   avg_task_rating: number;
-  tasker_leaderboard: {
+  floor_manager_leaderboard: {
     id: string;
     name: string;
     avg_rating: number;

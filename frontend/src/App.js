@@ -1,11 +1,12 @@
 import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "@/auth/AuthContext";
 import AppLayout from "@/components/AppLayout";
 
 import LoginPage from "@/pages/LoginPage";
+import ChangePasswordPage from "@/pages/ChangePasswordPage";
 import DashboardPage from "@/pages/DashboardPage";
 import TasksPage from "@/pages/TasksPage";
 import TaskDetailPage from "@/pages/TaskDetailPage";
@@ -22,7 +23,8 @@ import ReviewsPage from "@/pages/ReviewsPage";
 import TeamMemberPage from "@/pages/TeamMemberPage";
 
 function AuthGate() {
-  const { isAuthed, loading } = useAuth();
+  const { isAuthed, loading, user } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -41,6 +43,10 @@ function AuthGate() {
 
   if (!isAuthed) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user?.must_change_password && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
   }
 
   return <Outlet />;
@@ -65,6 +71,7 @@ function App() {
 
           {/* Protected routes with layout */}
           <Route element={<AuthGate />}>
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
               <Route path="tasks" element={<TasksPage />} />
